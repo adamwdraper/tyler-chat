@@ -4,4 +4,4 @@
 source ~/.pyenv/versions/tyler/bin/activate
 
 # Run the FastAPI server
-uvicorn main:app --reload --port 8000 
+uvicorn api_server:app --reload --port 8000 

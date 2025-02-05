@@ -10,9 +10,9 @@ export interface Thread {
 export interface ThreadMessage {
   id: string;
   content: string;
+  type: string;
+  senderId: string;
   timestamp: string;
-  senderId: 'user' | 'assistant';
-  status?: 'sending' | 'sent' | 'error';
 }
 
 export interface ToolCall {
