@@ -102,6 +102,30 @@ async def get_threads():
         for thread in threads
     ]
 
+@app.get("/api/threads/{thread_id}")
+async def get_thread(thread_id: str):
+    thread = store.get(thread_id)
+    if not thread:
+        raise HTTPException(status_code=404, detail="Thread not found")
+        
+    return {
+        "id": thread.id,
+        "name": "Tyler",  # For now, all threads are with Tyler
+        "avatar": "/avatars/tyler.jpg",  # Default avatar
+        "status": "online",
+        "messages": [
+            {
+                "id": msg.id,
+                "content": msg.content,
+                "type": "text",
+                "senderId": msg.role,
+                "timestamp": msg.timestamp.isoformat() if msg.timestamp else datetime.now().isoformat()
+            }
+            for msg in thread.messages
+        ],
+        "lastActivity": thread.messages[-1].timestamp.isoformat() if thread.messages else None
+    }
+
 @app.post("/api/messages")
 async def create_message(message: MessageCreate):
     # Create or get thread
