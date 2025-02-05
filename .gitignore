@@ -36,10 +36,9 @@ yarn-error.log*
 *.sublime-project
 
 # Project specific
-modernize/
-themes/
 .env.*
 !.env.example
+modernize/
 
 # Distribution / packaging
 *.egg-info/

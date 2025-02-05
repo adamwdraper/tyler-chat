@@ -27,7 +27,7 @@ load_dotenv()
 
 # Initialize Tyler agent
 database_url = (
-    f"postgresql://{os.getenv('DB_USER')}:{os.getenv('DB_PASSWORD')}"
+    f"postgresql+asyncpg://{os.getenv('DB_USER')}:{os.getenv('DB_PASSWORD')}"
     f"@{os.getenv('DB_HOST')}:{os.getenv('DB_PORT', '5432')}"
     f"/{os.getenv('DB_NAME')}"
 )
@@ -80,7 +80,7 @@ class ThreadResponse(BaseModel):
 
 @app.get("/api/threads")
 async def get_threads():
-    threads = store.list()
+    threads = await store.list()
     return [
         {
             "id": thread.id,
@@ -104,7 +104,7 @@ async def get_threads():
 
 @app.get("/api/threads/{thread_id}")
 async def get_thread(thread_id: str):
-    thread = store.get(thread_id)
+    thread = await store.get(thread_id)
     if not thread:
         raise HTTPException(status_code=404, detail="Thread not found")
         
@@ -131,10 +131,10 @@ async def create_message(message: MessageCreate):
     # Create or get thread
     thread = None
     if message.thread_id:
-        thread = store.get(message.thread_id)
+        thread = await store.get(message.thread_id)
     if not thread:
         thread = Thread()
-        store.save(thread)
+        await store.save(thread)
 
     # Create message
     new_message = Message(
@@ -182,10 +182,10 @@ async def upload_file(file: UploadFile = File(...), thread_id: Optional[str] = N
     # Create or get thread
     thread = None
     if thread_id:
-        thread = store.get(thread_id)
+        thread = await store.get(thread_id)
     if not thread:
         thread = Thread()
-        store.save(thread)
+        await store.save(thread)
 
     # Create message with attachment
     new_message = Message(
@@ -241,7 +241,7 @@ async def websocket_endpoint(websocket: WebSocket):
 def setup_agent():
     # Configure storage with connection URL
     db_url = (
-        f"postgresql://{os.getenv('TYLER_DB_USER')}:{os.getenv('TYLER_DB_PASSWORD')}"
+        f"postgresql+asyncpg://{os.getenv('TYLER_DB_USER')}:{os.getenv('TYLER_DB_PASSWORD')}"
         f"@{os.getenv('TYLER_DB_HOST')}:{os.getenv('TYLER_DB_PORT')}/{os.getenv('TYLER_DB_NAME')}"
     )
     store = ThreadStore(db_url)
@@ -255,19 +255,35 @@ def setup_agent():
     return agent
 
 def create_thread(agent, message_content):
-    thread = Thread()
-    message = Message(role="user", content=message_content)
-    thread.add_message(message)
+    # This should be async since it uses async operations
+    async def _create_thread():
+        thread = Thread()
+        message = Message(role="user", content=message_content)
+        thread.add_message(message)
+        
+        processed_thread, new_messages = await agent.go(thread)
+        return processed_thread, new_messages
     
-    processed_thread, new_messages = agent.go(thread)
-    
-    return processed_thread, new_messages
+    return _create_thread()
+
+@app.delete("/api/threads/{thread_id}")
+async def delete_thread(thread_id: str):
+    # Delete the thread (which includes all its messages)
+    success = await store.delete(thread_id)
+    if success:
+        return {"status": "success", "message": "Thread deleted"}
+    else:
+        raise HTTPException(status_code=404, detail="Thread not found")
 
 if __name__ == "__main__":
     # Test the setup
-    agent = setup_agent()
-    thread, messages = create_thread(agent, "Hello! What can you help me with?")
+    async def main():
+        agent = setup_agent()
+        thread, messages = await create_thread(agent, "Hello! What can you help me with?")
+        
+        for message in messages:
+            if message.role == "assistant":
+                print(message.content)
     
-    for message in messages:
-        if message.role == "assistant":
-            print(message.content) 
+    # Run the async main function
+    asyncio.run(main()) 
