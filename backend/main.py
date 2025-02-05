@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
 import asyncio
-import json
+import weave
 import os
 from dotenv import load_dotenv
 from tyler.models.agent import Agent
@@ -25,6 +25,11 @@ app.add_middleware(
 # Load environment variables first
 load_dotenv()
 
+# Initialize weave for tracing (optional - requires WANDB_API_KEY environment variable)
+if os.getenv("WANDB_API_KEY"):
+    weave.init("company-of-agents/tyler-chat")
+
+
 # Initialize Tyler agent
 database_url = (
     f"postgresql+asyncpg://{os.getenv('DB_USER')}:{os.getenv('DB_PASSWORD')}"
@@ -36,7 +41,10 @@ store = ThreadStore(database_url)
 # Initialize agent with configured store
 agent = Agent(
     thread_store=store,
-    purpose="To help with general questions and tasks"
+    purpose="To help with general questions and tasks",
+    tools=[
+        "web"
+    ]
 )
 
 # WebSocket connection manager

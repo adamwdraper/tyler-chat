@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useWebSocket } from '../hooks/useWebSocket';
 import {
   Box,
@@ -19,6 +19,10 @@ import { Send as SendIcon } from '@mui/icons-material';
 import { IconRobot, IconUser, IconSearch, IconMessage, IconPlus, IconTrash } from '@tabler/icons-react';
 import { Thread, ThreadMessage } from '../types/chat';
 import { formatDistanceToNowStrict, isToday, format } from 'date-fns';
+import ThreadList from './chat/ThreadList';
+import MessageList from './chat/MessageList';
+import MessageInput from './chat/MessageInput';
+import ThreadHeader from './chat/ThreadHeader';
 
 const drawerWidth = 280;
 
@@ -55,6 +59,7 @@ const TylerChat = () => {
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [pendingResponse, setPendingResponse] = useState(false);
 
   useEffect(() => {
     fetchThreads();
@@ -90,7 +95,38 @@ const TylerChat = () => {
   const sendMessage = async () => {
     if (!message.trim() || !currentThread) return;
 
-    setLoading(true);
+    const optimisticMessage: ThreadMessage = {
+      id: `temp-${Date.now()}`,
+      content: message.trim(),
+      timestamp: new Date().toISOString(),
+      senderId: 'user',
+    };
+
+    // Add a pending assistant message
+    const pendingAssistantMessage: ThreadMessage = {
+      id: `pending-${Date.now()}`,
+      content: '...',
+      timestamp: new Date().toISOString(),
+      senderId: 'assistant',
+      status: 'sending'
+    };
+
+    // Optimistically update the UI with both messages
+    const updatedThread = {
+      ...currentThread,
+      messages: [...currentThread.messages, optimisticMessage, pendingAssistantMessage],
+      lastActivity: optimisticMessage.timestamp
+    };
+    
+    setCurrentThread(updatedThread);
+    setThreads(prevThreads => 
+      prevThreads.map(t => 
+        t.id === currentThread.id ? updatedThread : t
+      )
+    );
+    setMessage('');
+    setPendingResponse(true);
+    
     try {
       // If this is a temporary thread, create it first
       let threadId = currentThread.id;
@@ -115,27 +151,46 @@ const TylerChat = () => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          content: message,
+          content: optimisticMessage.content,
           thread_id: threadId,
           type: 'text'
         }),
       });
 
-      const data = await response.json();
-      setMessage('');
+      if (!response.ok) {
+        throw new Error('Failed to send message');
+      }
+
+      // After successful response, the pending message will be replaced by fetchThreads()
       await fetchThreads();
     } catch (error) {
       console.error('Error sending message:', error);
+      
+      // Revert both the user message and pending assistant message on error
+      if (currentThread) {
+        const revertedThread = {
+          ...currentThread,
+          messages: currentThread.messages.filter(m => 
+            m.id !== optimisticMessage.id && m.id !== pendingAssistantMessage.id
+          )
+        };
+        setCurrentThread(revertedThread);
+        setThreads(prevThreads => 
+          prevThreads.map(t => 
+            t.id === currentThread.id ? revertedThread : t
+          )
+        );
+      }
     } finally {
-      setLoading(false);
+      setPendingResponse(false);
     }
   };
 
-  const handleWebSocketMessage = (data: any) => {
+  const handleWebSocketMessage = useCallback((data: any) => {
     if (data.type === 'new_message') {
       fetchThreads(); // Refresh threads when new message arrives
     }
-  };
+  }, []);
 
   useWebSocket(handleWebSocketMessage);
 
@@ -156,211 +211,22 @@ const TylerChat = () => {
 
   return (
     <Box sx={{ display: 'flex', height: '100vh', backgroundColor: 'background.default' }}>
-      <Paper
-        sx={{
-          width: drawerWidth,
-          flexShrink: 0,
-          borderRight: (theme) => `1px solid ${theme.palette.divider}`,
-          backgroundColor: 'background.default',
-        }}
-        elevation={0}
-      >
-        {/* Search Header */}
-        <Box p={3} pb={2}>
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-            <Typography variant="h5">
-              Conversations
-            </Typography>
-            <IconButton
-              color="primary"
-              onClick={startNewChat}
-              size="small"
-              sx={{
-                backgroundColor: 'primary.light',
-                '&:hover': {
-                  backgroundColor: 'primary.main',
-                  color: 'white',
-                },
-              }}
-            >
-              <IconPlus size={18} />
-            </IconButton>
-          </Box>
-          <TextField
-            fullWidth
-            size="small"
-            placeholder="Search chats..."
-            variant="outlined"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <IconSearch size={18} />
-                </InputAdornment>
-              ),
-            }}
-          />
-        </Box>
+      <ThreadList
+        threads={threads}
+        currentThread={currentThread}
+        onThreadSelect={setCurrentThread}
+        onNewChat={startNewChat}
+        onDeleteThread={deleteThread}
+      />
 
-        {/* Thread List */}
-        <Box sx={{ height: 'calc(100vh - 140px)', overflow: 'auto', px: 3 }}>
-          {threads.map((thread) => (
-            <ListItemButton
-              key={thread.id}
-              selected={currentThread?.id === thread.id}
-              onClick={() => setCurrentThread(thread)}
-              sx={{
-                mb: 1,
-                borderRadius: '8px',
-                position: 'relative',
-                '&.Mui-selected': {
-                  backgroundColor: 'primary.light',
-                  '&:hover': {
-                    backgroundColor: 'primary.light',
-                  },
-                },
-                '&:hover': {
-                  backgroundColor: 'grey.100',
-                  '& .delete-button': {
-                    opacity: 1,
-                  },
-                },
-              }}
-            >
-              <Box sx={{ width: '100%', py: 1 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Typography variant="subtitle2" fontWeight={600}>
-                    {thread.name}
-                  </Typography>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Typography variant="caption" color="textSecondary">
-                      {formatTimestamp(thread.lastActivity)}
-                    </Typography>
-                    <IconButton
-                      className="delete-button"
-                      size="small"
-                      onClick={(e) => deleteThread(thread.id, e)}
-                      sx={{
-                        opacity: 0,
-                        transition: 'opacity 0.2s',
-                        color: 'text.secondary',
-                        '&:hover': {
-                          color: 'error.main',
-                          backgroundColor: 'error.lighter',
-                        },
-                      }}
-                    >
-                      <IconTrash size={16} />
-                    </IconButton>
-                  </Box>
-                </Box>
-                <Typography
-                  variant="body2"
-                  color="textSecondary"
-                  sx={{
-                    mt: 0.5,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {thread.messages[thread.messages.length - 1]?.content}
-                </Typography>
-              </Box>
-            </ListItemButton>
-          ))}
-        </Box>
-      </Paper>
-
-      {/* Main Chat Area - Similar to EmailContent.tsx */}
       <Box sx={{ 
         flexGrow: 1,
         display: 'flex',
         flexDirection: 'column',
         backgroundColor: (theme) => alpha(theme.palette.background.default, 0.98),
       }}>
-        {/* Chat Header */}
-        <Paper
-          elevation={0}
-          sx={{
-            p: 3,
-            borderBottom: '1px solid',
-            borderColor: 'divider',
-            backgroundColor: 'background.paper',
-          }}
-        >
-          {currentThread && (
-            <Stack direction="row" alignItems="center" spacing={2}>
-              <Avatar sx={{ width: 40, height: 40 }}>
-                <IconMessage size={20} />
-              </Avatar>
-              <Box>
-                <Typography variant="h6">{currentThread.name}</Typography>
-                <Typography variant="body2" color="textSecondary">
-                  {currentThread.messages.length} messages
-                </Typography>
-              </Box>
-            </Stack>
-          )}
-        </Paper>
-
-        {/* Messages */}
-        <Box sx={{ 
-          flex: 1,
-          overflow: 'auto',
-          p: 3,
-        }}>
-          {currentThread?.messages.map((message) => (
-            <Box
-              key={message.id}
-              sx={{
-                mb: 2,
-                display: 'flex',
-                flexDirection: message.senderId === 'user' ? 'row-reverse' : 'row',
-                gap: 2,
-              }}
-            >
-              <Avatar
-                sx={{
-                  bgcolor: message.senderId === 'assistant' ? 'primary.light' : 'grey.200',
-                  color: message.senderId === 'assistant' ? 'primary.main' : 'text.secondary',
-                }}
-              >
-                {message.senderId === 'assistant' ? (
-                  <IconRobot size={20} />
-                ) : (
-                  <IconUser size={20} />
-                )}
-              </Avatar>
-              <Paper
-                elevation={0}
-                sx={{
-                  p: 2,
-                  maxWidth: '70%',
-                  backgroundColor: message.senderId === 'user' ? 'primary.light' : 'background.paper',
-                  borderRadius: 2,
-                }}
-              >
-                <Typography
-                  variant="body1"
-                  color={message.senderId === 'user' ? 'primary.main' : 'text.primary'}
-                >
-                  {message.content}
-                </Typography>
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{ display: 'block', mt: 1 }}
-                >
-                  {formatTimestamp(message.timestamp, false)}
-                </Typography>
-              </Paper>
-            </Box>
-          ))}
-        </Box>
-
-        {/* Message Input */}
+        <ThreadHeader thread={currentThread} />
+        <MessageList messages={currentThread?.messages || []} />
         <Paper
           elevation={0}
           sx={{
@@ -370,39 +236,12 @@ const TylerChat = () => {
             backgroundColor: 'background.paper',
           }}
         >
-          <Stack direction="row" spacing={2}>
-            <TextField
-              fullWidth
-              multiline
-              maxRows={4}
-              variant="outlined"
-              placeholder="Type your message..."
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              onKeyPress={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  sendMessage();
-                }
-              }}
-            />
-            <IconButton
-              color="primary"
-              onClick={sendMessage}
-              disabled={loading || !message.trim()}
-              sx={{ 
-                p: '8px',
-                alignSelf: 'flex-end',
-                backgroundColor: 'primary.main',
-                color: 'white',
-                '&:hover': {
-                  backgroundColor: 'primary.dark',
-                },
-              }}
-            >
-              <SendIcon />
-            </IconButton>
-          </Stack>
+          <MessageInput
+            message={message}
+            loading={loading}
+            onMessageChange={setMessage}
+            onSendMessage={sendMessage}
+          />
         </Paper>
       </Box>
     </Box>
