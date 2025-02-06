@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { List, Box, Typography, IconButton, Stack, Divider } from '@mui/material';
+import { List, Box, Typography, IconButton, Stack } from '@mui/material';
 import { IconPlus } from '@tabler/icons-react';
 import { useSelector } from 'react-redux';
 import ThreadListItem from './ThreadListItem';
@@ -48,7 +48,7 @@ const ThreadList: React.FC<Props> = ({ showMobileSidebar }) => {
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
-      <Box sx={{ p: 2, borderBottom: (theme) => `1px solid ${theme.palette.divider}` }}>
+      <Box sx={{ p: 2 }}>
         <Stack direction="row" alignItems="center" justifyContent="space-between">
           <Typography variant="h6">Chats</Typography>
           <IconButton 
@@ -69,7 +69,7 @@ const ThreadList: React.FC<Props> = ({ showMobileSidebar }) => {
 
       {/* Thread List */}
       <Box sx={{ flexGrow: 1, overflow: 'hidden' }}>
-        <List>
+        <List sx={{ px: 2 }}>
           <Scrollbar sx={{ height: { lg: 'calc(100vh - 100px)', md: '100vh' }, maxHeight: '800px' }}>
             {sortedThreads.map((thread: Thread) => (
               <ThreadListItem

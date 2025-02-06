@@ -3,6 +3,12 @@ export interface Message {
   role: string;
   content: string;
   created_at: string;
+  timestamp: string;
+  attachments?: Array<{
+    filename: string;
+    mime_type?: string;
+    processed_content?: any;
+  }>;
 }
 
 export interface Thread {
