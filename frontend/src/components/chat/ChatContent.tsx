@@ -14,6 +14,7 @@ import {
   CircularProgress,
   Button,
   keyframes,
+  Fade,
 } from '@mui/material';
 import { 
   IconSend, 
@@ -93,12 +94,22 @@ const ChatContent: React.FC = () => {
   const [expandedMessages, setExpandedMessages] = React.useState<Set<string>>(new Set());
   const [contentHeights, setContentHeights] = React.useState<Map<string, number>>(new Map());
   const [isNewTitle, setIsNewTitle] = React.useState(false);
+  const [fadeIn, setFadeIn] = React.useState(true);
   const contentRefs = React.useRef<Map<string, HTMLDivElement>>(new Map());
   const maxHeight = 300; // About 15 lines of text
   const wsRef = useRef<WebSocket>();
   
   const { threads, currentThread } = useSelector((state: RootState) => state.chat);
   const activeThread = threads.find((t: Thread) => t.id === currentThread);
+
+  // Add fade effect when thread changes
+  useEffect(() => {
+    setFadeIn(false);
+    const timer = setTimeout(() => {
+      setFadeIn(true);
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [currentThread]);
 
   // WebSocket connection management
   useEffect(() => {
@@ -693,33 +704,53 @@ const ChatContent: React.FC = () => {
   );
 
   return (
-    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: 'background.paper' }}>
+    <Box
+      sx={{
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        bgcolor: 'background.paper',
+      }}
+    >
       <Box sx={{ p: 3, borderBottom: `1px solid ${theme.palette.divider}` }} />
-      <Box sx={{ flexGrow: 1, overflow: 'hidden' }}>
-        <Scrollbar>
-          {activeThread?.messages.map((message, index, messages) => 
-            renderMessage(message, index, messages)
-          )}
-          {isProcessing && renderLoadingMessage()}
-          {!activeThread && !isProcessing && (
-            <Box sx={{ 
-              height: '100%',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              minHeight: 'calc(100vh - 200px)'
-            }}>
-              <Typography variant="h5" gutterBottom>
-                Welcome to Tyler Chat
-              </Typography>
-              <Typography color="textSecondary">
-                Start a new conversation by typing a message below
-              </Typography>
-            </Box>
-          )}
-          <div ref={messagesEndRef} />
-        </Scrollbar>
+      <Box sx={{ flexGrow: 1, position: 'relative', overflow: 'hidden' }}>
+        <Fade in={fadeIn} timeout={300}>
+          <Box sx={{ height: '100%' }}>
+            <Scrollbar
+              sx={{
+                height: '100%',
+                '& .simplebar-content': {
+                  height: '100%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                },
+              }}
+            >
+              {activeThread?.messages?.map((message: Message, index: number, messages: Message[]) => 
+                renderMessage(message, index, messages)
+              )}
+              {isProcessing && renderLoadingMessage()}
+              {!activeThread && !isProcessing && (
+                <Box sx={{ 
+                  height: '100%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  minHeight: 'calc(100vh - 200px)'
+                }}>
+                  <Typography variant="h5" gutterBottom>
+                    Welcome to Tyler Chat
+                  </Typography>
+                  <Typography color="textSecondary">
+                    Start a new conversation by typing a message below
+                  </Typography>
+                </Box>
+              )}
+              <div ref={messagesEndRef} />
+            </Scrollbar>
+          </Box>
+        </Fade>
       </Box>
 
       <Box sx={{ p: 3, borderTop: `1px solid ${theme.palette.divider}`, bgcolor: 'background.default' }}>
