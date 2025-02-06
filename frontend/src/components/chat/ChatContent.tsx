@@ -217,61 +217,21 @@ const ChatContent: React.FC = () => {
 
   const renderFormattedCode = (data: any) => {
     return (
-      <Box
-        component="pre"
+      <Paper
+        variant="outlined"
         sx={{
-          m: 0,
-          p: 2,
-          borderRadius: 1,
-          bgcolor: theme => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.100',
-          overflow: 'auto',
+          bgcolor: theme => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
           fontFamily: 'monospace',
+          overflow: 'hidden',
           fontSize: '0.875rem',
           whiteSpace: 'pre-wrap',
           wordWrap: 'break-word',
-          '& .json-key': {
-            color: theme => theme.palette.mode === 'dark' ? '#9cdcfe' : '#0451a5',
-          },
-          '& .json-string': {
-            color: theme => theme.palette.mode === 'dark' ? '#ce9178' : '#a31515',
-          },
-          '& .json-number': {
-            color: theme => theme.palette.mode === 'dark' ? '#b5cea8' : '#098658',
-          },
-          '& .json-boolean': {
-            color: theme => theme.palette.mode === 'dark' ? '#569cd6' : '#0000ff',
-          },
-          '& .json-null': {
-            color: theme => theme.palette.mode === 'dark' ? '#569cd6' : '#0000ff',
-          },
+          color: 'text.secondary',
+          p: 2,
         }}
       >
-        {JSON.stringify(data, null, 2)
-          .split('\n')
-          .map((line, i) => {
-            // Add syntax highlighting
-            const highlightedLine = line.replace(
-              /(".*?")|(-?\d+\.?\d*)|(\btrue\b|\bfalse\b|\bnull\b)/g,
-              (match, string, number, keyword) => {
-                if (string) return `<span class="json-string">${string}</span>`;
-                if (number) return `<span class="json-number">${number}</span>`;
-                if (keyword) return `<span class="json-boolean">${keyword}</span>`;
-                return match;
-              }
-            )
-            // Highlight keys
-            .replace(/"([^"]+)":/g, '"<span class="json-key">$1</span>":');
-            
-            return (
-              <Box
-                key={i}
-                component="span"
-                sx={{ display: 'block' }}
-                dangerouslySetInnerHTML={{ __html: highlightedLine }}
-              />
-            );
-          })}
-      </Box>
+        {JSON.stringify(data, null, 2)}
+      </Paper>
     );
   };
 
@@ -369,20 +329,30 @@ const ChatContent: React.FC = () => {
                         mt: 1.5 
                       },
                       '& pre': {
+                        m: 0,
                         p: 2,
                         borderRadius: 1,
-                        bgcolor: theme => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.100',
-                        overflow: 'auto'
+                        bgcolor: theme => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
+                        border: 1,
+                        borderColor: theme => theme.palette.mode === 'dark' ? 'grey.700' : 'grey.200',
+                        fontFamily: 'monospace',
+                        fontSize: '0.875rem',
+                        overflow: 'auto',
+                        whiteSpace: 'pre-wrap',
+                        wordWrap: 'break-word',
                       },
                       '& code': {
                         fontFamily: 'monospace',
+                        fontSize: '0.875rem',
                         p: 0.5,
                         borderRadius: 0.5,
-                        bgcolor: theme => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.100',
+                        bgcolor: theme => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
+                        color: theme => theme.palette.mode === 'dark' ? '#ce9178' : '#a31515',
                       },
                       '& pre code': {
                         p: 0,
                         bgcolor: 'transparent',
+                        color: 'text.primary',
                       },
                       '& ul, & ol': {
                         my: 0,
@@ -482,62 +452,44 @@ const ChatContent: React.FC = () => {
                         key={call.id}
                         variant="outlined"
                         sx={{
-                          bgcolor: (theme) => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
+                          bgcolor: theme => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
                           fontFamily: 'monospace',
                           overflow: 'hidden'
                         }}
                       >
                         {/* Tool Call */}
                         <Box sx={{ p: 2 }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Typography 
-                              variant="body2" 
+                          <Box>
+                            <Box
+                              component="span"
                               sx={{ 
                                 fontFamily: 'monospace',
                                 color: 'primary.main',
-                                fontWeight: 600
+                                fontWeight: 600,
+                                fontSize: '0.875rem',
                               }}
                             >
                               {call.function.name}
-                            </Typography>
-                            <Typography 
-                              variant="body2" 
+                            </Box>
+                            <Box
+                              component="span"
                               sx={{ 
                                 fontFamily: 'monospace',
-                                color: 'text.secondary'
-                              }}
-                            >
-                              (
-                            </Typography>
-                          </Box>
-                          <Box sx={{ ml: 2 }}>
-                            <Typography 
-                              variant="body2" 
-                              sx={{ 
-                                fontFamily: 'monospace',
+                                color: 'text.secondary',
                                 whiteSpace: 'pre-wrap',
-                                color: 'text.secondary'
+                                fontSize: '0.875rem',
                               }}
                             >
                               {(() => {
                                 try {
                                   const args = JSON.parse(call.function.arguments);
-                                  return JSON.stringify(args, null, 2);
+                                  return ` ({\n    ${Object.entries(args).map(([key, value]) => `"${key}": ${JSON.stringify(value)}`).join(',\n    ')}\n})`
                                 } catch {
-                                  return call.function.arguments;
+                                  return ` (${call.function.arguments})`
                                 }
                               })()}
-                            </Typography>
+                            </Box>
                           </Box>
-                          <Typography 
-                            variant="body2" 
-                            sx={{ 
-                              fontFamily: 'monospace',
-                              color: 'text.secondary'
-                            }}
-                          >
-                            );
-                          </Typography>
                         </Box>
                       </Paper>
                     ))}
