@@ -29,6 +29,8 @@ import {
   IconMessage,
   IconTool,
   IconPlaystationCircle,
+  IconCopy,
+  IconCheck,
 } from '@tabler/icons-react';
 import { useSelector } from 'react-redux';
 import { addMessage, processThread, createThread, updateThread, deleteThread } from '@/store/chat/ChatSlice';
@@ -103,6 +105,7 @@ const ChatContent: React.FC = () => {
   const contentRefs = React.useRef<Map<string, HTMLDivElement>>(new Map());
   const maxHeight = 300; // About 15 lines of text
   const wsRef = useRef<WebSocket>();
+  const [copiedMessageId, setCopiedMessageId] = React.useState<string | null>(null);
   
   const { threads, currentThread } = useSelector((state: RootState) => state.chat);
   const activeThread = threads.find((t: Thread) => t.id === currentThread);
@@ -407,6 +410,26 @@ const ChatContent: React.FC = () => {
     );
   };
 
+  const handleCopyMessage = async (message: Message) => {
+    let textToCopy = '';
+    if (typeof message.content === 'string') {
+      textToCopy = message.content;
+    } else if (Array.isArray(message.content)) {
+      textToCopy = message.content
+        .filter(item => item.type === 'text')
+        .map(item => (item as TextContent).text)
+        .join('\n\n');
+    }
+
+    try {
+      await navigator.clipboard.writeText(textToCopy);
+      setCopiedMessageId(message.id);
+      setTimeout(() => setCopiedMessageId(null), 2000);
+    } catch (err) {
+      console.error('Failed to copy message:', err);
+    }
+  };
+
   const renderMessage = (message: Message, index: number, messages: Message[]) => {
     const isAI = message.role === 'assistant';
     const isSystem = message.role === 'system';
@@ -669,6 +692,22 @@ const ChatContent: React.FC = () => {
                     typography: 'caption',
                   }}
                 >
+                  <IconButton
+                    onClick={() => handleCopyMessage(message)}
+                    size="small"
+                    sx={{ 
+                      p: 0.5,
+                      color: 'text.secondary',
+                      '&:hover': {
+                        color: 'primary.main',
+                      }
+                    }}
+                  >
+                    {copiedMessageId === message.id ? <IconCheck size={14} /> : <IconCopy size={14} />}
+                  </IconButton>
+                  <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    #{index + 1}
+                  </Box>
                   {message.metrics && (
                     <>
                       {message.metrics.usage?.total_tokens > 0 && (
