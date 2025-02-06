@@ -387,7 +387,7 @@ const ChatContent: React.FC = () => {
     return (
       <Box key={message.id}>
         <Box p={3} sx={{ display: 'flex', justifyContent: 'center' }}>
-          <Box sx={{ width: '100%', maxWidth: 1000 }}>
+          <Box sx={{ width: '100%', maxWidth: 900 }}>
             <Stack direction="row" gap="16px" mb={2}>
               <Avatar
                 sx={{
@@ -658,7 +658,7 @@ const ChatContent: React.FC = () => {
       {activeThread && (
         <Box sx={{ p: 3, borderBottom: `1px solid ${theme.palette.divider}` }}>
           <Typography variant="h6">
-            {activeThread.title || 'Untitled Chat'}
+            {activeThread.title || 'New Chat'}
           </Typography>
         </Box>
       )}

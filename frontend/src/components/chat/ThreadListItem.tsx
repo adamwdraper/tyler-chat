@@ -30,7 +30,7 @@ const ThreadListItem: React.FC<Props> = ({ thread, isSelected, onClick }) => {
       <Box sx={{ width: '100%' }}>
         <Stack direction="row" gap="10px" alignItems="center" mb={0.5}>
           <Typography variant="subtitle2" fontWeight={600} sx={{ flex: 1 }}>
-            {thread.title || 'Untitled Chat'}
+            {thread.title || 'New Chat'}
           </Typography>
           <Typography variant="caption" color="textSecondary">
             {thread.updated_at ? formatDistanceToNowStrict(parseISO(thread.updated_at), {

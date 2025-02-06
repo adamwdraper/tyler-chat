@@ -163,9 +163,23 @@ async def process_thread(
     if not thread:
         raise HTTPException(status_code=404, detail="Thread not found")
     
+    # Count assistant messages before processing
+    assistant_messages_before = len([m for m in thread.messages if m.role == "assistant"])
+    
     processed_thread, new_messages = await agent.go(thread.id)
-    await thread_store.save(processed_thread)
-    return processed_thread
+    
+    # Update the original thread with the processed messages
+    thread.messages = processed_thread.messages
+    
+    # Count assistant messages after processing
+    assistant_messages_after = len([m for m in thread.messages if m.role == "assistant"])
+    
+    # Generate title only if this is the first ever assistant message
+    if assistant_messages_before == 0 and assistant_messages_after > 0:
+        thread.generate_title()
+    
+    await thread_store.save(thread)
+    return thread
 
 @app.get("/threads/search/attributes")
 async def search_threads_by_attributes(
