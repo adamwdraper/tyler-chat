@@ -192,12 +192,32 @@ const ChatContent: React.FC = () => {
 
   const isPythonDictString = (str: string) => {
     try {
+      // First unescape any escaped quotes
+      let processedStr = str.replace(/\\"/g, '"').replace(/\\'/g, "'");
+      
+      // Remove any outer quotes
+      processedStr = processedStr.trim();
+      if ((processedStr.startsWith('"') && processedStr.endsWith('"')) || 
+          (processedStr.startsWith("'") && processedStr.endsWith("'"))) {
+        processedStr = processedStr.slice(1, -1);
+      }
+
+      // Find the first occurrence of '{'
+      const firstBrace = processedStr.indexOf('{');
+      if (firstBrace === -1) {
+        return false;
+      }
+
+      // Extract from the first '{' to the end
+      const dictPart = processedStr.slice(firstBrace);
+      
       // Replace Python True/False/None with JSON true/false/null
-      const jsonified = str
+      const jsonified = dictPart
         .replace(/True/g, 'true')
         .replace(/False/g, 'false')
         .replace(/None/g, 'null')
         .replace(/'/g, '"'); // Replace single quotes with double quotes
+      
       JSON.parse(jsonified);
       return true;
     } catch (e) {
@@ -206,12 +226,32 @@ const ChatContent: React.FC = () => {
   };
 
   const formatPythonDict = (str: string) => {
+    // First unescape any escaped quotes
+    let processedStr = str.replace(/\\"/g, '"').replace(/\\'/g, "'");
+    
+    // Remove any outer quotes
+    processedStr = processedStr.trim();
+    if ((processedStr.startsWith('"') && processedStr.endsWith('"')) || 
+        (processedStr.startsWith("'") && processedStr.endsWith("'"))) {
+      processedStr = processedStr.slice(1, -1);
+    }
+
+    // Find the first occurrence of '{'
+    const firstBrace = processedStr.indexOf('{');
+    if (firstBrace === -1) {
+      throw new Error('No dictionary found');
+    }
+
+    // Extract from the first '{' to the end
+    const dictPart = processedStr.slice(firstBrace);
+    
     // Convert Python dict string to JSON format
-    const jsonified = str
+    const jsonified = dictPart
       .replace(/True/g, 'true')
       .replace(/False/g, 'false')
       .replace(/None/g, 'null')
       .replace(/'/g, '"');
+    
     return JSON.parse(jsonified);
   };
 
@@ -226,6 +266,8 @@ const ChatContent: React.FC = () => {
           fontSize: '0.875rem',
           whiteSpace: 'pre-wrap',
           wordWrap: 'break-word',
+          width: '100%',
+          wordBreak: 'break-word',
           color: 'text.secondary',
           p: 2,
         }}
@@ -252,7 +294,36 @@ const ChatContent: React.FC = () => {
     );
   };
 
-  const renderContent = (content: string) => {
+  const renderContent = (content: string, role: string) => {
+    // Always render tool results in code container
+    if (role === 'tool') {
+      try {
+        // Try to parse as JSON first, then as Python dict
+        let data;
+        if (isJsonString(content)) {
+          data = JSON.parse(content);
+        } else if (isPythonDictString(content)) {
+          data = formatPythonDict(content);
+        } else {
+          // If it's not recognized as either, but starts with a curly brace, try to format it
+          const trimmed = content.trim();
+          if (trimmed.startsWith('{')) {
+            try {
+              data = formatPythonDict(content);
+            } catch {
+              data = content;
+            }
+          } else {
+            data = content;
+          }
+        }
+        return renderFormattedCode(data);
+      } catch (e) {
+        // Fallback to rendering the raw content in code container
+        return renderFormattedCode(content);
+      }
+    }
+
     if (isJsonString(content)) {
       try {
         const data = JSON.parse(content);
@@ -393,7 +464,7 @@ const ChatContent: React.FC = () => {
                         },
                       }}
                     >
-                      {renderContent(message.content)}
+                      {renderContent(message.content, message.role)}
                     </Box>
                     {!isExpanded && shouldShowExpand && (
                       <Box
