@@ -26,6 +26,9 @@ import {
   IconChevronDown,
   IconChevronUp,
   IconTrash,
+  IconMessage,
+  IconTool,
+  IconPlaystationCircle,
 } from '@tabler/icons-react';
 import { useSelector } from 'react-redux';
 import { addMessage, processThread, createThread, updateThread, deleteThread } from '@/store/chat/ChatSlice';
@@ -711,6 +714,17 @@ const ChatContent: React.FC = () => {
     }
   };
 
+  const calculateMetrics = () => {
+    if (!activeThread) return { messages: 0, tools: 0, tokens: 0 };
+    
+    const messageCount = activeThread.messages.length;
+    const toolCalls = activeThread.messages.reduce((count, msg) => 
+      count + (msg.tool_calls?.length || 0), 0);
+    const totalTokens = activeThread.metrics.total_tokens || 0;
+
+    return { messages: messageCount, tools: toolCalls, tokens: totalTokens };
+  };
+
   return (
     <Box
       sx={{
@@ -728,12 +742,25 @@ const ChatContent: React.FC = () => {
         alignItems: 'center'
       }}>
         {activeThread && (
-          <Stack direction="row" spacing={2} alignItems="center">
-            <Typography variant="h6" sx={{ 
-              animation: isNewTitle ? `${titleTypingAnimation} 1s ease-out` : 'none'
-            }}>
-              {activeThread.title}
-            </Typography>
+          <Stack direction="row" spacing={3} alignItems="center">
+            <Stack direction="row" spacing={1} alignItems="center">
+              <IconMessage size={20} style={{ color: theme.palette.primary.main }} />
+              <Typography variant="body2">
+                {calculateMetrics().messages}
+              </Typography>
+            </Stack>
+            <Stack direction="row" spacing={1} alignItems="center">
+              <IconTool size={20} style={{ color: theme.palette.secondary.main }} />
+              <Typography variant="body2">
+                {calculateMetrics().tools}
+              </Typography>
+            </Stack>
+            <Stack direction="row" spacing={1} alignItems="center">
+              <IconPlaystationCircle size={20} style={{ color: theme.palette.warning.main }} />
+              <Typography variant="body2">
+                {calculateMetrics().tokens.toLocaleString()}
+              </Typography>
+            </Stack>
           </Stack>
         )}
         {activeThread && (
