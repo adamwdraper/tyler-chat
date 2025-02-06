@@ -715,9 +715,6 @@ const ChatContent: React.FC = () => {
                   >
                     {copiedMessageId === message.id ? <IconCheck size={14} /> : <IconCopy size={14} />}
                   </IconButton>
-                  <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    #{message.sequence ?? 'None'}
-                  </Box>
                   {message.metrics && (
                     <>
                       {message.metrics.usage?.total_tokens > 0 && (
