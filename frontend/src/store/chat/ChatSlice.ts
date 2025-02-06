@@ -50,6 +50,14 @@ export const processThread = createAsyncThunk(
   }
 );
 
+export const deleteThread = createAsyncThunk(
+  'chat/deleteThread',
+  async (threadId: string) => {
+    await axios.delete(`${API_BASE_URL}/threads/${threadId}`);
+    return threadId;
+  }
+);
+
 const chatSlice = createSlice({
   name: 'chat',
   initialState,
@@ -93,6 +101,12 @@ const chatSlice = createSlice({
         const threadIndex = state.threads.findIndex(t => t.id === action.payload.id);
         if (threadIndex !== -1) {
           state.threads[threadIndex] = action.payload;
+        }
+      })
+      .addCase(deleteThread.fulfilled, (state, action) => {
+        state.threads = state.threads.filter(t => t.id !== action.payload);
+        if (state.currentThread === action.payload) {
+          state.currentThread = null;
         }
       });
   },

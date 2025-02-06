@@ -7,20 +7,43 @@ export interface ToolCall {
   };
 }
 
+export interface ImageUrl {
+  url: string;
+}
+
+export interface ImageContent {
+  type: 'image_url';
+  image_url: ImageUrl;
+}
+
+export interface TextContent {
+  type: 'text';
+  text: string;
+}
+
 export interface Message {
   id: string;
   role: string;
-  content: string;
+  content: string | Array<TextContent | ImageContent>;
   name?: string;
   tool_call_id?: string;
   tool_calls?: ToolCall[];
-  created_at: string;
+  attributes: Record<string, any>;
   timestamp: string;
+  source?: Record<string, any>;
   attachments?: Array<{
     filename: string;
+    content: string;  // base64 string
     mime_type?: string;
     processed_content?: any;
   }>;
+  metrics: {
+    completion_tokens: number;
+    prompt_tokens: number;
+    total_tokens: number;
+    model?: string;
+    latency?: number;
+  };
 }
 
 export interface Thread {
@@ -28,17 +51,41 @@ export interface Thread {
   title: string;
   messages: Message[];
   attributes: Record<string, any>;
+  source?: Record<string, any>;
   created_at: string;
   updated_at: string;
+  metrics: {
+    completion_tokens: number;
+    prompt_tokens: number;
+    total_tokens: number;
+    model_usage: Record<string, {
+      calls: number;
+      completion_tokens: number;
+      prompt_tokens: number;
+      total_tokens: number;
+    }>;
+  };
 }
 
 export interface ThreadCreate {
   title?: string;
   system_prompt?: string;
   attributes?: Record<string, any>;
+  source?: Record<string, any>;
+  metrics?: {
+    completion_tokens?: number;
+    prompt_tokens?: number;
+    total_tokens?: number;
+    model_usage?: Record<string, any>;
+  };
 }
 
 export interface MessageCreate {
   role: string;
-  content: string;
+  content: string | Array<TextContent | ImageContent>;
+  name?: string;
+  tool_call_id?: string;
+  tool_calls?: ToolCall[];
+  attributes?: Record<string, any>;
+  source?: Record<string, any>;
 } 

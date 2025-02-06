@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, Query, Depends, WebSocket, WebSocketDisconnect, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from typing import List, Optional, Dict, Any, Set
+from typing import List, Optional, Dict, Any, Set, Union, Literal
 from pydantic import BaseModel
 import uvicorn
 import os
@@ -9,11 +9,13 @@ from dotenv import load_dotenv
 import weave
 import asyncpg
 import json
+from sqlalchemy.orm import selectinload
+from sqlalchemy import select
 
 from tyler.models.thread import Thread
-from tyler.models.message import Message
+from tyler.models.message import Message, Attachment
 from tyler.models.agent import Agent
-from tyler.database.thread_store import ThreadStore
+from tyler.database.thread_store import ThreadStore, ThreadRecord
 
 # Load environment variables from .env file
 load_dotenv()
@@ -23,14 +25,32 @@ if os.getenv("WANDB_API_KEY"):
     weave.init("tyler")
 
 # Pydantic models for request/response
+class ImageUrl(BaseModel):
+    url: str
+
+class ImageContent(BaseModel):
+    type: Literal["image_url"]
+    image_url: ImageUrl
+
+class TextContent(BaseModel):
+    type: Literal["text"]
+    text: str
+
 class MessageCreate(BaseModel):
     role: str
-    content: str
+    content: Union[str, List[Union[TextContent, ImageContent]]]
+    name: Optional[str] = None
+    tool_call_id: Optional[str] = None
+    tool_calls: Optional[list] = None
+    attributes: Optional[Dict[str, Any]] = None
+    source: Optional[Dict[str, Any]] = None
 
 class ThreadCreate(BaseModel):
     title: Optional[str] = None
     system_prompt: Optional[str] = None
     attributes: Optional[Dict[str, Any]] = None
+    source: Optional[Dict[str, Any]] = None
+    metrics: Optional[Dict[str, Any]] = None
 
 class ThreadUpdate(BaseModel):
     title: Optional[str] = None
@@ -117,7 +137,14 @@ async def create_thread(
     """Create a new thread"""
     thread = Thread(
         title=thread_data.title,
-        attributes=thread_data.attributes or {}
+        attributes=thread_data.attributes or {},
+        source=thread_data.source,
+        metrics=thread_data.metrics or {
+            "completion_tokens": 0,
+            "prompt_tokens": 0,
+            "total_tokens": 0,
+            "model_usage": {}
+        }
     )
     
     if thread_data.system_prompt:
@@ -189,7 +216,12 @@ async def add_message(
     
     new_message = Message(
         role=message.role,
-        content=message.content
+        content=message.content,
+        name=message.name,
+        tool_call_id=message.tool_call_id,
+        tool_calls=message.tool_calls,
+        attributes=message.attributes or {},
+        source=message.source
     )
     thread.add_message(new_message)
     

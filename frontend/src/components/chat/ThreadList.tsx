@@ -7,6 +7,7 @@ import { fetchThreads, setCurrentThread } from '@/store/chat/ChatSlice';
 import { Thread } from '@/types/chat';
 import { RootState } from '@/store/Store';
 import { useAppDispatch } from '@/hooks/useAppDispatch';
+import { useTheme } from '@mui/material/styles';
 
 interface Props {
   showMobileSidebar?: () => void;
@@ -15,6 +16,7 @@ interface Props {
 const ThreadList: React.FC<Props> = ({ showMobileSidebar }) => {
   const dispatch = useAppDispatch();
   const { threads, currentThread, loading } = useSelector((state: RootState) => state.chat);
+  const theme = useTheme();
 
   useEffect(() => {
     dispatch(fetchThreads());
@@ -46,12 +48,17 @@ const ThreadList: React.FC<Props> = ({ showMobileSidebar }) => {
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
-      <Box sx={{ p: 2 }}>
-        <Stack direction="row" alignItems="center" justifyContent="space-between">
+      <Box sx={{ 
+        py: 3,
+        px: 4,
+        display: 'flex',
+      }}>
+        <Stack direction="row" alignItems="center" justifyContent="space-between" width="100%">
           <Typography variant="h6">Chats</Typography>
           <IconButton 
             onClick={handleNewChat}
             color="primary"
+            size="small"
             sx={{
               bgcolor: 'primary.light',
               '&:hover': {
@@ -60,7 +67,7 @@ const ThreadList: React.FC<Props> = ({ showMobileSidebar }) => {
               },
             }}
           >
-            <IconPlus size={18} />
+            <IconPlus size={20} />
           </IconButton>
         </Stack>
       </Box>
