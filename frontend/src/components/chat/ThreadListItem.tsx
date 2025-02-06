@@ -6,7 +6,7 @@ import {
   Box,
 } from '@mui/material';
 import { Thread } from '@/types/chat';
-import { formatDistanceToNowStrict, parseISO } from 'date-fns';
+import { formatTimeAgo } from '@/utils/dateUtils';
 
 interface Props {
   thread: Thread;
@@ -33,9 +33,7 @@ const ThreadListItem: React.FC<Props> = ({ thread, isSelected, onClick }) => {
             {thread.title || 'New Chat'}
           </Typography>
           <Typography variant="caption" color="textSecondary">
-            {thread.updated_at ? formatDistanceToNowStrict(parseISO(thread.updated_at), {
-              addSuffix: false,
-            }) + ' ago' : ''}
+            {thread.updated_at ? formatTimeAgo(thread.updated_at) : ''}
           </Typography>
         </Stack>
         {lastMessage && (

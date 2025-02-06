@@ -30,7 +30,7 @@ import { RootState } from '@/store/Store';
 import { Message, Thread, ToolCall } from '@/types/chat';
 import Scrollbar from '@/components/custom-scroll/Scrollbar';
 import { useAppDispatch } from '@/hooks/useAppDispatch';
-import { formatDistanceToNowStrict, parseISO } from 'date-fns';
+import { formatTimeAgo } from '@/utils/dateUtils';
 
 const dotAnimation = keyframes`
   0%, 20% {
@@ -648,7 +648,7 @@ const ChatContent: React.FC = () => {
                   </Box>
                 )}
 
-                {/* Timestamp - moved to end */}
+                {/* Timestamp */}
                 <Typography 
                   variant="caption" 
                   color="textSecondary"
@@ -658,9 +658,7 @@ const ChatContent: React.FC = () => {
                     mt: 1
                   }}
                 >
-                  {message.timestamp ? formatDistanceToNowStrict(parseISO(message.timestamp), {
-                    addSuffix: true,
-                  }) : ''}
+                  {message.timestamp ? formatTimeAgo(message.timestamp) : ''}
                 </Typography>
               </Box>
             </Stack>
