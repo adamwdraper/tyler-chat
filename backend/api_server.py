@@ -4,7 +4,7 @@ from typing import List, Optional, Dict, Any, Set, Union, Literal
 from pydantic import BaseModel
 import uvicorn
 import os
-from datetime import datetime
+from datetime import datetime, UTC
 from dotenv import load_dotenv
 import weave
 import asyncpg
@@ -238,16 +238,6 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
     except WebSocketDisconnect:
         manager.disconnect(websocket, thread_id)
 
-async def generate_and_save_title(thread_id: str, thread_store: ThreadStore, manager: ConnectionManager):
-    """Background task to generate and save title"""
-    print(f"\nBackground task starting for thread {thread_id}")
-    thread = await thread_store.get(thread_id)
-    if thread:
-        thread.generate_title()
-        await manager.broadcast_title_update(thread.id, thread)
-        await thread_store.save(thread)
-        print("Title saved and broadcasted")
-
 @app.post("/threads/{thread_id}/process", response_model=Thread)
 async def process_thread(
     thread_id: str,
@@ -259,26 +249,39 @@ async def process_thread(
     if not thread:
         raise HTTPException(status_code=404, detail="Thread not found")
     
-    # Count assistant messages before processing
-    assistant_messages_before = len([m for m in thread.messages if m.role == "assistant"])
     print(f"\nProcessing thread {thread_id}")
-    
     processed_thread, new_messages = await agent.go(thread.id)
     
-    # Update the original thread with the processed messages
-    thread.messages = processed_thread.messages
+    # Check if this is a new chat (title is default) and we haven't generated a title yet
+    if processed_thread.title == "New Chat" and not processed_thread.attributes.get("title_generated"):
+        # Only generate title if we have at least one assistant message
+        if any(m.role == "assistant" for m in processed_thread.messages):
+            background_tasks.add_task(generate_and_save_title, thread_id, thread_store, manager)
     
-    # Save thread with new messages first
-    await thread_store.save(thread)
-    
-    # Count assistant messages after processing
-    assistant_messages_after = len([m for m in thread.messages if m.role == "assistant"])
-    
-    # Schedule title generation in background if this is the first assistant message
-    if assistant_messages_before == 0 and assistant_messages_after > 0:
-        background_tasks.add_task(generate_and_save_title, thread_id, thread_store, manager)
-    
-    return thread
+    return processed_thread
+
+async def generate_and_save_title(thread_id: str, thread_store: ThreadStore, manager: ConnectionManager):
+    """Background task to generate and save title"""
+    print(f"\nBackground task starting for thread {thread_id}")
+    thread = await thread_store.get(thread_id)
+    if thread and not thread.attributes.get("title_generated"):
+        # Generate new title
+        new_title = thread.generate_title()
+        
+        # Update title and set the flag
+        thread.attributes["title_generated"] = True
+        updated_thread = await update_thread(
+            thread_id=thread_id,
+            thread_data=ThreadUpdate(
+                title=new_title,
+                attributes=thread.attributes
+            ),
+            thread_store=thread_store
+        )
+        
+        # Broadcast the update
+        await manager.broadcast_title_update(thread_id, updated_thread)
+        print("Title saved and broadcasted")
 
 @app.get("/threads/search/attributes")
 async def search_threads_by_attributes(
