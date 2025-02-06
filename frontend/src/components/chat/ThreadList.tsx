@@ -4,7 +4,6 @@ import { IconPlus } from '@tabler/icons-react';
 import { useSelector } from 'react-redux';
 import ThreadListItem from './ThreadListItem';
 import { fetchThreads, setCurrentThread } from '@/store/chat/ChatSlice';
-import Scrollbar from '@/components/custom-scroll/Scrollbar';
 import { Thread } from '@/types/chat';
 import { RootState } from '@/store/Store';
 import { useAppDispatch } from '@/hooks/useAppDispatch';
@@ -68,25 +67,29 @@ const ThreadList: React.FC<Props> = ({ showMobileSidebar }) => {
       </Box>
 
       {/* Thread List */}
-      <Box sx={{ flexGrow: 1, overflow: 'hidden' }}>
-        <List sx={{ px: 2 }}>
-          <Scrollbar sx={{ height: { lg: 'calc(100vh - 100px)', md: '100vh' }, maxHeight: '800px' }}>
-            {sortedThreads.map((thread: Thread) => (
-              <ThreadListItem
-                key={thread.id}
-                thread={thread}
-                isSelected={thread.id === currentThread}
-                onClick={() => handleThreadClick(thread.id)}
-              />
-            ))}
-            {threads.length === 0 && (
-              <Box p={3} textAlign="center">
-                <Typography color="textSecondary">
-                  No conversations yet. Start a new chat!
-                </Typography>
-              </Box>
-            )}
-          </Scrollbar>
+      <Box sx={{ 
+        flexGrow: 1, 
+        overflow: 'auto',
+        '&::-webkit-scrollbar': { display: 'none' },
+        msOverflowStyle: 'none',
+        scrollbarWidth: 'none',
+      }}>
+        <List sx={{ px: 2, height: '100%' }}>
+          {sortedThreads.map((thread: Thread) => (
+            <ThreadListItem
+              key={thread.id}
+              thread={thread}
+              isSelected={thread.id === currentThread}
+              onClick={() => handleThreadClick(thread.id)}
+            />
+          ))}
+          {threads.length === 0 && (
+            <Box p={3} textAlign="center">
+              <Typography color="textSecondary">
+                No conversations yet. Start a new chat!
+              </Typography>
+            </Box>
+          )}
         </List>
       </Box>
     </Box>
