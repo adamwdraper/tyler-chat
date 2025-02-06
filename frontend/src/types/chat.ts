@@ -46,6 +46,7 @@ export interface MessageMetrics {
 export interface Message {
   id: string;
   role: "system" | "user" | "assistant" | "tool";
+  sequence?: number;  // Message sequence number within thread
   content: string | (TextContent | ImageContent)[];
   name?: string;
   tool_call_id?: string;

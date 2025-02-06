@@ -110,6 +110,16 @@ const ChatContent: React.FC = () => {
   const { threads, currentThread } = useSelector((state: RootState) => state.chat);
   const activeThread = threads.find((t: Thread) => t.id === currentThread);
 
+  // Sort messages by sequence
+  const sortedMessages = React.useMemo(() => {
+    if (!activeThread?.messages) return [];
+    return [...activeThread.messages].sort((a, b) => {
+      const seqA = a.sequence ?? Number.MAX_SAFE_INTEGER;
+      const seqB = b.sequence ?? Number.MAX_SAFE_INTEGER;
+      return seqA - seqB;
+    });
+  }, [activeThread?.messages]);
+
   // Add fade effect when thread changes
   useEffect(() => {
     setFadeIn(false);
@@ -706,7 +716,7 @@ const ChatContent: React.FC = () => {
                     {copiedMessageId === message.id ? <IconCheck size={14} /> : <IconCopy size={14} />}
                   </IconButton>
                   <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    #{index + 1}
+                    #{message.sequence ?? 'None'}
                   </Box>
                   {message.metrics && (
                     <>
@@ -1040,8 +1050,8 @@ const ChatContent: React.FC = () => {
                 },
               }}
             >
-              {activeThread?.messages?.map((message: Message, index: number, messages: Message[]) => 
-                renderMessage(message, index, messages)
+              {sortedMessages.map((message, index) => 
+                renderMessage(message, index, sortedMessages)
               )}
               {isProcessing && renderLoadingMessage()}
               {!activeThread && !isProcessing && (
