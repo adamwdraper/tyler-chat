@@ -291,255 +291,257 @@ const ChatContent: React.FC = () => {
     
     return (
       <Box key={message.id}>
-        <Box p={3}>
-          <Stack direction="row" gap="10px" mb={2}>
-            <Avatar
-              sx={{
-                bgcolor: getMessageColor(message.role),
-                width: 40,
-                height: 40,
-                color: 'white',
-                alignSelf: 'flex-start'
-              }}
-            >
-              {getMessageIcon(message.role)}
-            </Avatar>
-            <Box sx={{ flex: 1, mt: '10px' }}>
-              {/* Message content with gradient fade */}
-              {message.content && (
-                <Box
-                  sx={{
-                    position: 'relative',
-                    maxHeight: isExpanded ? 'none' : maxHeight,
-                    overflow: 'hidden'
-                  }}
-                >
-                  <Box
-                    ref={el => {
-                      if (el) {
-                        contentRefs.current.set(message.id, el as HTMLDivElement);
-                      }
-                    }}
-                    sx={{
-                      '& p': { 
-                        m: 0, 
-                        lineHeight: 1.5 
-                      },
-                      '& p + p': { 
-                        mt: 1.5 
-                      },
-                      '& pre': {
-                        m: 0,
-                        p: 2,
-                        borderRadius: 1,
-                        bgcolor: theme => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
-                        border: 1,
-                        borderColor: theme => theme.palette.mode === 'dark' ? 'grey.700' : 'grey.200',
-                        fontFamily: 'monospace',
-                        fontSize: '0.875rem',
-                        overflow: 'auto',
-                        whiteSpace: 'pre-wrap',
-                        wordWrap: 'break-word',
-                      },
-                      '& code': {
-                        fontFamily: 'monospace',
-                        fontSize: '0.875rem',
-                        p: 0.5,
-                        borderRadius: 0.5,
-                        bgcolor: theme => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
-                        color: theme => theme.palette.mode === 'dark' ? '#ce9178' : '#a31515',
-                      },
-                      '& pre code': {
-                        p: 0,
-                        bgcolor: 'transparent',
-                        color: 'text.primary',
-                      },
-                      '& ul, & ol': {
-                        my: 0,
-                        pl: 3,
-                      },
-                      '& li + li': {
-                        mt: 0.5,
-                      },
-                      '& a': {
-                        color: 'primary.main',
-                        textDecoration: 'none',
-                        '&:hover': {
-                          textDecoration: 'underline',
-                        },
-                      },
-                      '& blockquote': {
-                        borderLeft: 4,
-                        borderColor: theme => theme.palette.mode === 'dark' ? 'grey.700' : 'grey.300',
-                        my: 1,
-                        pl: 2,
-                        ml: 0,
-                        color: 'text.secondary',
-                      },
-                      '& table': {
-                        borderCollapse: 'collapse',
-                        width: '100%',
-                        my: 2,
-                      },
-                      '& th, & td': {
-                        border: 1,
-                        borderColor: theme => theme.palette.mode === 'dark' ? 'grey.700' : 'grey.300',
-                        p: 1,
-                      },
-                      '& th': {
-                        bgcolor: theme => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.100',
-                        fontWeight: 'bold',
-                      },
-                    }}
-                  >
-                    {renderContent(message.content)}
-                  </Box>
-                  {!isExpanded && shouldShowExpand && (
-                    <Box
-                      sx={{
-                        position: 'absolute',
-                        bottom: 0,
-                        left: 0,
-                        right: 0,
-                        height: '110px',
-                        background: theme.palette.mode === 'dark' 
-                          ? 'linear-gradient(180deg, transparent 0%, rgba(33,33,33,0.8) 50%, rgba(33,33,33,0.95) 100%)'
-                          : 'linear-gradient(180deg, transparent 0%, rgba(255,255,255,0.8) 50%, rgba(255,255,255,0.95) 100%)',
-                        display: 'flex',
-                        alignItems: 'flex-end',
-                        justifyContent: 'center',
-                        pt: 4
-                      }}
-                    >
-                      <Button
-                        size="small"
-                        variant="text"
-                        onClick={() => toggleMessageExpand(message.id)}
-                        startIcon={<IconChevronDown size={16} />}
-                        sx={{ 
-                          mb: 1,
-                          bgcolor: theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.5)',
-                          '&:hover': {
-                            bgcolor: theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.7)',
-                          }
-                        }}
-                      >
-                        More
-                      </Button>
-                    </Box>
-                  )}
-                </Box>
-              )}
-              {isExpanded && shouldShowExpand && (
-                <Box sx={{ textAlign: 'center', mt: 1 }}>
-                  <Button
-                    size="small"
-                    variant="text"
-                    onClick={() => toggleMessageExpand(message.id)}
-                    startIcon={<IconChevronUp size={16} />}
-                  >
-                    Less
-                  </Button>
-                </Box>
-              )}
-
-              {/* Tool calls */}
-              {message.tool_calls && message.tool_calls.length > 0 && (
-                <Box sx={{ mt: 2 }}>
-                  <Stack spacing={2}>
-                    {message.tool_calls.map((call) => (
-                      <Paper
-                        key={call.id}
-                        variant="outlined"
-                        sx={{
-                          bgcolor: theme => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
-                          fontFamily: 'monospace',
-                          overflow: 'hidden'
-                        }}
-                      >
-                        {/* Tool Call */}
-                        <Box sx={{ p: 2 }}>
-                          <Box>
-                            <Box
-                              component="span"
-                              sx={{ 
-                                fontFamily: 'monospace',
-                                color: 'primary.main',
-                                fontWeight: 600,
-                                fontSize: '0.875rem',
-                              }}
-                            >
-                              {call.function.name}
-                            </Box>
-                            <Box
-                              component="span"
-                              sx={{ 
-                                fontFamily: 'monospace',
-                                color: 'text.secondary',
-                                whiteSpace: 'pre-wrap',
-                                fontSize: '0.875rem',
-                              }}
-                            >
-                              {(() => {
-                                try {
-                                  const args = JSON.parse(call.function.arguments);
-                                  return ` ({\n    ${Object.entries(args).map(([key, value]) => `"${key}": ${JSON.stringify(value)}`).join(',\n    ')}\n})`
-                                } catch {
-                                  return ` (${call.function.arguments})`
-                                }
-                              })()}
-                            </Box>
-                          </Box>
-                        </Box>
-                      </Paper>
-                    ))}
-                  </Stack>
-                </Box>
-              )}
-
-              {/* Attachments */}
-              {message.attachments && message.attachments.length > 0 && (
-                <Box sx={{ mt: 2 }}>
-                  <Typography variant="subtitle2" gutterBottom>
-                    Attachments ({message.attachments.length})
-                  </Typography>
-                  <Stack direction="row" spacing={2}>
-                    {message.attachments.map((attachment, index) => (
-                      <Paper
-                        key={index}
-                        variant="outlined"
-                        sx={{
-                          p: 2,
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 1
-                        }}
-                      >
-                        <Typography variant="body2">
-                          {attachment.filename}
-                        </Typography>
-                      </Paper>
-                    ))}
-                  </Stack>
-                </Box>
-              )}
-
-              {/* Timestamp - moved to end */}
-              <Typography 
-                variant="caption" 
-                color="textSecondary"
-                sx={{ 
-                  display: 'block',
-                  textAlign: 'right',
-                  mt: 1
+        <Box p={3} sx={{ display: 'flex', justifyContent: 'center' }}>
+          <Box sx={{ width: '100%', maxWidth: 1000 }}>
+            <Stack direction="row" gap="16px" mb={2}>
+              <Avatar
+                sx={{
+                  bgcolor: getMessageColor(message.role),
+                  width: 40,
+                  height: 40,
+                  color: 'white',
+                  alignSelf: 'flex-start'
                 }}
               >
-                {message.timestamp ? formatDistanceToNowStrict(parseISO(message.timestamp), {
-                  addSuffix: true,
-                }) : ''}
-              </Typography>
-            </Box>
-          </Stack>
+                {getMessageIcon(message.role)}
+              </Avatar>
+              <Box sx={{ flex: 1, mt: '10px' }}>
+                {/* Message content with gradient fade */}
+                {message.content && (
+                  <Box
+                    sx={{
+                      position: 'relative',
+                      maxHeight: isExpanded ? 'none' : maxHeight,
+                      overflow: 'hidden'
+                    }}
+                  >
+                    <Box
+                      ref={el => {
+                        if (el) {
+                          contentRefs.current.set(message.id, el as HTMLDivElement);
+                        }
+                      }}
+                      sx={{
+                        '& p': { 
+                          m: 0, 
+                          lineHeight: 1.5 
+                        },
+                        '& p + p': { 
+                          mt: 1.5 
+                        },
+                        '& pre': {
+                          m: 0,
+                          p: 2,
+                          borderRadius: 1,
+                          bgcolor: theme => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
+                          border: 1,
+                          borderColor: theme => theme.palette.mode === 'dark' ? 'grey.700' : 'grey.200',
+                          fontFamily: 'monospace',
+                          fontSize: '0.875rem',
+                          overflow: 'auto',
+                          whiteSpace: 'pre-wrap',
+                          wordWrap: 'break-word',
+                        },
+                        '& code': {
+                          fontFamily: 'monospace',
+                          fontSize: '0.875rem',
+                          p: 0.5,
+                          borderRadius: 0.5,
+                          bgcolor: theme => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
+                          color: theme => theme.palette.mode === 'dark' ? '#ce9178' : '#a31515',
+                        },
+                        '& pre code': {
+                          p: 0,
+                          bgcolor: 'transparent',
+                          color: 'text.primary',
+                        },
+                        '& ul, & ol': {
+                          my: 0,
+                          pl: 3,
+                        },
+                        '& li + li': {
+                          mt: 0.5,
+                        },
+                        '& a': {
+                          color: 'primary.main',
+                          textDecoration: 'none',
+                          '&:hover': {
+                            textDecoration: 'underline',
+                          },
+                        },
+                        '& blockquote': {
+                          borderLeft: 4,
+                          borderColor: theme => theme.palette.mode === 'dark' ? 'grey.700' : 'grey.300',
+                          my: 1,
+                          pl: 2,
+                          ml: 0,
+                          color: 'text.secondary',
+                        },
+                        '& table': {
+                          borderCollapse: 'collapse',
+                          width: '100%',
+                          my: 2,
+                        },
+                        '& th, & td': {
+                          border: 1,
+                          borderColor: theme => theme.palette.mode === 'dark' ? 'grey.700' : 'grey.300',
+                          p: 1,
+                        },
+                        '& th': {
+                          bgcolor: theme => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.100',
+                          fontWeight: 'bold',
+                        },
+                      }}
+                    >
+                      {renderContent(message.content)}
+                    </Box>
+                    {!isExpanded && shouldShowExpand && (
+                      <Box
+                        sx={{
+                          position: 'absolute',
+                          bottom: 0,
+                          left: 0,
+                          right: 0,
+                          height: '110px',
+                          background: theme.palette.mode === 'dark' 
+                            ? 'linear-gradient(180deg, transparent 0%, rgba(33,33,33,0.8) 50%, rgba(33,33,33,0.95) 100%)'
+                            : 'linear-gradient(180deg, transparent 0%, rgba(255,255,255,0.8) 50%, rgba(255,255,255,0.95) 100%)',
+                          display: 'flex',
+                          alignItems: 'flex-end',
+                          justifyContent: 'center',
+                          pt: 4
+                        }}
+                      >
+                        <Button
+                          size="small"
+                          variant="text"
+                          onClick={() => toggleMessageExpand(message.id)}
+                          startIcon={<IconChevronDown size={16} />}
+                          sx={{ 
+                            mb: 1,
+                            bgcolor: theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.5)',
+                            '&:hover': {
+                              bgcolor: theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.7)',
+                            }
+                          }}
+                        >
+                          More
+                        </Button>
+                      </Box>
+                    )}
+                  </Box>
+                )}
+                {isExpanded && shouldShowExpand && (
+                  <Box sx={{ textAlign: 'center', mt: 1 }}>
+                    <Button
+                      size="small"
+                      variant="text"
+                      onClick={() => toggleMessageExpand(message.id)}
+                      startIcon={<IconChevronUp size={16} />}
+                    >
+                      Less
+                    </Button>
+                  </Box>
+                )}
+
+                {/* Tool calls */}
+                {message.tool_calls && message.tool_calls.length > 0 && (
+                  <Box sx={{ mt: 2 }}>
+                    <Stack spacing={2}>
+                      {message.tool_calls.map((call) => (
+                        <Paper
+                          key={call.id}
+                          variant="outlined"
+                          sx={{
+                            bgcolor: theme => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
+                            fontFamily: 'monospace',
+                            overflow: 'hidden'
+                          }}
+                        >
+                          {/* Tool Call */}
+                          <Box sx={{ p: 2 }}>
+                            <Box>
+                              <Box
+                                component="span"
+                                sx={{ 
+                                  fontFamily: 'monospace',
+                                  color: 'primary.main',
+                                  fontWeight: 600,
+                                  fontSize: '0.875rem',
+                                }}
+                              >
+                                {call.function.name}
+                              </Box>
+                              <Box
+                                component="span"
+                                sx={{ 
+                                  fontFamily: 'monospace',
+                                  color: 'text.secondary',
+                                  whiteSpace: 'pre-wrap',
+                                  fontSize: '0.875rem',
+                                }}
+                              >
+                                {(() => {
+                                  try {
+                                    const args = JSON.parse(call.function.arguments);
+                                    return ` ({\n    ${Object.entries(args).map(([key, value]) => `"${key}": ${JSON.stringify(value)}`).join(',\n    ')}\n})`
+                                  } catch {
+                                    return ` (${call.function.arguments})`
+                                  }
+                                })()}
+                              </Box>
+                            </Box>
+                          </Box>
+                        </Paper>
+                      ))}
+                    </Stack>
+                  </Box>
+                )}
+
+                {/* Attachments */}
+                {message.attachments && message.attachments.length > 0 && (
+                  <Box sx={{ mt: 2 }}>
+                    <Typography variant="subtitle2" gutterBottom>
+                      Attachments ({message.attachments.length})
+                    </Typography>
+                    <Stack direction="row" spacing={2}>
+                      {message.attachments.map((attachment, index) => (
+                        <Paper
+                          key={index}
+                          variant="outlined"
+                          sx={{
+                            p: 2,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 1
+                          }}
+                        >
+                          <Typography variant="body2">
+                            {attachment.filename}
+                          </Typography>
+                        </Paper>
+                      ))}
+                    </Stack>
+                  </Box>
+                )}
+
+                {/* Timestamp - moved to end */}
+                <Typography 
+                  variant="caption" 
+                  color="textSecondary"
+                  sx={{ 
+                    display: 'block',
+                    textAlign: 'right',
+                    mt: 1
+                  }}
+                >
+                  {message.timestamp ? formatDistanceToNowStrict(parseISO(message.timestamp), {
+                    addSuffix: true,
+                  }) : ''}
+                </Typography>
+              </Box>
+            </Stack>
+          </Box>
         </Box>
         {!isLastMessage && <Divider />}
       </Box>
