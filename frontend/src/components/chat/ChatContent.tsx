@@ -15,6 +15,7 @@ import {
   Button,
   keyframes,
   Fade,
+  Tooltip,
 } from '@mui/material';
 import { 
   IconSend, 
@@ -23,10 +24,11 @@ import {
   IconCode,
   IconDots,
   IconChevronDown,
-  IconChevronUp
+  IconChevronUp,
+  IconTrash,
 } from '@tabler/icons-react';
 import { useSelector } from 'react-redux';
-import { addMessage, processThread, createThread, updateThread } from '@/store/chat/ChatSlice';
+import { addMessage, processThread, createThread, updateThread, deleteThread } from '@/store/chat/ChatSlice';
 import { RootState } from '@/store/Store';
 import { Message, Thread, ToolCall } from '@/types/chat';
 import Scrollbar from '@/components/custom-scroll/Scrollbar';
@@ -703,6 +705,12 @@ const ChatContent: React.FC = () => {
     </Box>
   );
 
+  const handleDeleteThread = async () => {
+    if (currentThread) {
+      await dispatch(deleteThread(currentThread));
+    }
+  };
+
   return (
     <Box
       sx={{
@@ -712,7 +720,40 @@ const ChatContent: React.FC = () => {
         bgcolor: 'background.paper',
       }}
     >
-      <Box sx={{ p: 3, borderBottom: `1px solid ${theme.palette.divider}` }} />
+      <Box sx={{ 
+        p: 3, 
+        borderBottom: `1px solid ${theme.palette.divider}`,
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center'
+      }}>
+        {activeThread && (
+          <Stack direction="row" spacing={2} alignItems="center">
+            <Typography variant="h6" sx={{ 
+              animation: isNewTitle ? `${titleTypingAnimation} 1s ease-out` : 'none'
+            }}>
+              {activeThread.title}
+            </Typography>
+          </Stack>
+        )}
+        {activeThread && (
+          <Tooltip title="Delete thread">
+            <IconButton 
+              onClick={handleDeleteThread}
+              size="small"
+              color="error"
+              sx={{
+                '&:hover': {
+                  bgcolor: 'error.light',
+                  color: 'white',
+                },
+              }}
+            >
+              <IconTrash size={20} />
+            </IconButton>
+          </Tooltip>
+        )}
+      </Box>
       <Box sx={{ flexGrow: 1, position: 'relative', overflow: 'hidden' }}>
         <Fade in={fadeIn} timeout={300}>
           <Box sx={{ height: '100%' }}>
