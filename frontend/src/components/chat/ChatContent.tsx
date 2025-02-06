@@ -190,10 +190,10 @@ const ChatContent: React.FC = () => {
                         bottom: 0,
                         left: 0,
                         right: 0,
-                        height: '100px',
+                        height: '110px',
                         background: theme.palette.mode === 'dark' 
-                          ? 'linear-gradient(180deg, transparent, rgba(33,33,33,0.9) 70%)'
-                          : 'linear-gradient(180deg, transparent, rgba(255,255,255,0.9) 70%)',
+                          ? 'linear-gradient(180deg, transparent 0%, rgba(33,33,33,0.8) 50%, rgba(33,33,33,0.95) 100%)'
+                          : 'linear-gradient(180deg, transparent 0%, rgba(255,255,255,0.8) 50%, rgba(255,255,255,0.95) 100%)',
                         display: 'flex',
                         alignItems: 'flex-end',
                         justifyContent: 'center',
@@ -205,7 +205,13 @@ const ChatContent: React.FC = () => {
                         variant="text"
                         onClick={() => toggleMessageExpand(message.id)}
                         startIcon={<IconChevronDown size={16} />}
-                        sx={{ mb: 1 }}
+                        sx={{ 
+                          mb: 1,
+                          bgcolor: theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.5)',
+                          '&:hover': {
+                            bgcolor: theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.7)',
+                          }
+                        }}
                       >
                         Show More
                       </Button>
