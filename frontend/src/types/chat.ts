@@ -1,7 +1,19 @@
+export interface ToolCall {
+  id: string;
+  type: string;
+  function: {
+    name: string;
+    arguments: string;
+  };
+}
+
 export interface Message {
   id: string;
   role: string;
   content: string;
+  name?: string;
+  tool_call_id?: string;
+  tool_calls?: ToolCall[];
   created_at: string;
   timestamp: string;
   attachments?: Array<{

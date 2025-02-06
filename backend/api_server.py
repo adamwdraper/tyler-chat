@@ -56,6 +56,9 @@ thread_store = ThreadStore(db_url)
 agent = Agent(
     model_name="gpt-4o",
     purpose="To help with general questions",
+    tools=[
+        "web"
+    ],
     thread_store=thread_store
 )
 
