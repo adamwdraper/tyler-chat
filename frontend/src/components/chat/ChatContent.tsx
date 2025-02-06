@@ -105,10 +105,15 @@ const ChatContent: React.FC = () => {
     }
   };
 
-  const renderMessage = (message: Message) => {
+  const renderMessage = (message: Message, index: number, messages: Message[]) => {
     const isAI = message.role === 'assistant';
     const isSystem = message.role === 'system';
     const isTool = message.role === 'tool';
+
+    // Skip tool responses as they'll be rendered with their calls
+    if (isTool && message.tool_call_id) {
+      return null;
+    }
     
     return (
       <Box key={message.id}>
@@ -143,71 +148,106 @@ const ChatContent: React.FC = () => {
             </Typography>
           )}
 
-          {/* Tool calls */}
+          {/* Tool calls with their results */}
           {message.tool_calls && message.tool_calls.length > 0 && (
             <Box sx={{ pl: 7, mt: 2 }}>
               <Stack spacing={2}>
-                {message.tool_calls.map((call: ToolCall) => (
-                  <Paper
-                    key={call.id}
-                    variant="outlined"
-                    sx={{
-                      p: 2,
-                      bgcolor: (theme) => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
-                      fontFamily: 'monospace'
-                    }}
-                  >
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Typography 
-                        variant="body2" 
-                        sx={{ 
-                          fontFamily: 'monospace',
-                          color: 'primary.main',
-                          fontWeight: 600
-                        }}
-                      >
-                        {call.function.name}
-                      </Typography>
-                      <Typography 
-                        variant="body2" 
-                        sx={{ 
-                          fontFamily: 'monospace',
-                          color: 'text.secondary'
-                        }}
-                      >
-                        (
-                      </Typography>
-                    </Box>
-                    <Box sx={{ ml: 2 }}>
-                      <Typography 
-                        variant="body2" 
-                        sx={{ 
-                          fontFamily: 'monospace',
-                          whiteSpace: 'pre-wrap',
-                          color: 'text.secondary'
-                        }}
-                      >
-                        {(() => {
-                          try {
-                            const args = JSON.parse(call.function.arguments);
-                            return JSON.stringify(args, null, 2);
-                          } catch {
-                            return call.function.arguments;
-                          }
-                        })()}
-                      </Typography>
-                    </Box>
-                    <Typography 
-                      variant="body2" 
-                      sx={{ 
+                {message.tool_calls.map((call: ToolCall) => {
+                  // Find the corresponding tool response
+                  const toolResponse = messages.find(m => 
+                    m.role === 'tool' && 
+                    m.tool_call_id === call.id
+                  );
+
+                  return (
+                    <Paper
+                      key={call.id}
+                      variant="outlined"
+                      sx={{
+                        bgcolor: (theme) => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
                         fontFamily: 'monospace',
-                        color: 'text.secondary'
+                        overflow: 'hidden'
                       }}
                     >
-                      );
-                    </Typography>
-                  </Paper>
-                ))}
+                      {/* Tool Call */}
+                      <Box sx={{ p: 2 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Typography 
+                            variant="body2" 
+                            sx={{ 
+                              fontFamily: 'monospace',
+                              color: 'primary.main',
+                              fontWeight: 600
+                            }}
+                          >
+                            {call.function.name}
+                          </Typography>
+                          <Typography 
+                            variant="body2" 
+                            sx={{ 
+                              fontFamily: 'monospace',
+                              color: 'text.secondary'
+                            }}
+                          >
+                            (
+                          </Typography>
+                        </Box>
+                        <Box sx={{ ml: 2 }}>
+                          <Typography 
+                            variant="body2" 
+                            sx={{ 
+                              fontFamily: 'monospace',
+                              whiteSpace: 'pre-wrap',
+                              color: 'text.secondary'
+                            }}
+                          >
+                            {(() => {
+                              try {
+                                const args = JSON.parse(call.function.arguments);
+                                return JSON.stringify(args, null, 2);
+                              } catch {
+                                return call.function.arguments;
+                              }
+                            })()}
+                          </Typography>
+                        </Box>
+                        <Typography 
+                          variant="body2" 
+                          sx={{ 
+                            fontFamily: 'monospace',
+                            color: 'text.secondary'
+                          }}
+                        >
+                          );
+                        </Typography>
+                      </Box>
+
+                      {/* Tool Response */}
+                      {toolResponse && (
+                        <>
+                          <Divider />
+                          <Box 
+                            sx={{ 
+                              p: 2,
+                              bgcolor: (theme) => theme.palette.mode === 'dark' ? 'grey.900' : 'grey.100',
+                            }}
+                          >
+                            <Typography
+                              variant="body2"
+                              sx={{
+                                fontFamily: 'monospace',
+                                whiteSpace: 'pre-wrap',
+                                color: 'text.secondary'
+                              }}
+                            >
+                              {toolResponse.content}
+                            </Typography>
+                          </Box>
+                        </>
+                      )}
+                    </Paper>
+                  );
+                })}
               </Stack>
             </Box>
           )}
@@ -291,7 +331,9 @@ const ChatContent: React.FC = () => {
 
       <Box sx={{ flexGrow: 1, overflow: 'hidden' }}>
         <Scrollbar>
-          {activeThread?.messages.map(renderMessage)}
+          {activeThread?.messages.map((message, index, messages) => 
+            renderMessage(message, index, messages)
+          )}
           {isProcessing && renderLoadingMessage()}
           {!activeThread && !isProcessing && (
             <Box textAlign="center" py={8}>
