@@ -670,7 +670,14 @@ const ChatContent: React.FC = () => {
           )}
           {isProcessing && renderLoadingMessage()}
           {!activeThread && !isProcessing && (
-            <Box textAlign="center" py={8}>
+            <Box sx={{ 
+              height: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              minHeight: 'calc(100vh - 200px)'
+            }}>
               <Typography variant="h5" gutterBottom>
                 Welcome to Tyler Chat
               </Typography>
