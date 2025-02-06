@@ -1,4 +1,6 @@
 import React, { useRef, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import {
   Box,
   Typography,
@@ -37,7 +39,7 @@ const ChatContent: React.FC = () => {
   const [isProcessing, setIsProcessing] = React.useState(false);
   const [expandedMessages, setExpandedMessages] = React.useState<Set<string>>(new Set());
   const [contentHeights, setContentHeights] = React.useState<Map<string, number>>(new Map());
-  const contentRefs = React.useRef<Map<string, HTMLElement>>(new Map());
+  const contentRefs = React.useRef<Map<string, HTMLDivElement>>(new Map());
   const maxHeight = 200; // About 10 lines of text
   
   const { threads, currentThread } = useSelector((state: RootState) => state.chat);
@@ -116,6 +118,7 @@ const ChatContent: React.FC = () => {
       case 'assistant':
         return 'primary.main';
       case 'system':
+      case 'tool':
         return 'warning.main';
       default:
         return 'secondary.main';
@@ -134,6 +137,140 @@ const ChatContent: React.FC = () => {
     });
   };
 
+  const isJsonString = (str: string) => {
+    try {
+      JSON.parse(str);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  };
+
+  const isPythonDictString = (str: string) => {
+    try {
+      // Replace Python True/False/None with JSON true/false/null
+      const jsonified = str
+        .replace(/True/g, 'true')
+        .replace(/False/g, 'false')
+        .replace(/None/g, 'null')
+        .replace(/'/g, '"'); // Replace single quotes with double quotes
+      JSON.parse(jsonified);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  };
+
+  const formatPythonDict = (str: string) => {
+    // Convert Python dict string to JSON format
+    const jsonified = str
+      .replace(/True/g, 'true')
+      .replace(/False/g, 'false')
+      .replace(/None/g, 'null')
+      .replace(/'/g, '"');
+    return JSON.parse(jsonified);
+  };
+
+  const renderFormattedCode = (data: any) => {
+    return (
+      <Box
+        component="pre"
+        sx={{
+          m: 0,
+          p: 2,
+          borderRadius: 1,
+          bgcolor: theme => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.100',
+          overflow: 'auto',
+          fontFamily: 'monospace',
+          fontSize: '0.875rem',
+          whiteSpace: 'pre-wrap',
+          wordWrap: 'break-word',
+          '& .json-key': {
+            color: theme => theme.palette.mode === 'dark' ? '#9cdcfe' : '#0451a5',
+          },
+          '& .json-string': {
+            color: theme => theme.palette.mode === 'dark' ? '#ce9178' : '#a31515',
+          },
+          '& .json-number': {
+            color: theme => theme.palette.mode === 'dark' ? '#b5cea8' : '#098658',
+          },
+          '& .json-boolean': {
+            color: theme => theme.palette.mode === 'dark' ? '#569cd6' : '#0000ff',
+          },
+          '& .json-null': {
+            color: theme => theme.palette.mode === 'dark' ? '#569cd6' : '#0000ff',
+          },
+        }}
+      >
+        {JSON.stringify(data, null, 2)
+          .split('\n')
+          .map((line, i) => {
+            // Add syntax highlighting
+            const highlightedLine = line.replace(
+              /(".*?")|(-?\d+\.?\d*)|(\btrue\b|\bfalse\b|\bnull\b)/g,
+              (match, string, number, keyword) => {
+                if (string) return `<span class="json-string">${string}</span>`;
+                if (number) return `<span class="json-number">${number}</span>`;
+                if (keyword) return `<span class="json-boolean">${keyword}</span>`;
+                return match;
+              }
+            )
+            // Highlight keys
+            .replace(/"([^"]+)":/g, '"<span class="json-key">$1</span>":');
+            
+            return (
+              <Box
+                key={i}
+                component="span"
+                sx={{ display: 'block' }}
+                dangerouslySetInnerHTML={{ __html: highlightedLine }}
+              />
+            );
+          })}
+      </Box>
+    );
+  };
+
+  const renderMarkdown = (content: string) => {
+    return (
+      <ReactMarkdown 
+        remarkPlugins={[remarkGfm]}
+        components={{
+          p: ({ children }) => (
+            <Typography variant="body1" component="p">
+              {children}
+            </Typography>
+          ),
+        }}
+      >
+        {content}
+      </ReactMarkdown>
+    );
+  };
+
+  const renderContent = (content: string) => {
+    if (isJsonString(content)) {
+      try {
+        const data = JSON.parse(content);
+        return renderFormattedCode(data);
+      } catch (e) {
+        // Fallback to markdown
+        return renderMarkdown(content);
+      }
+    } else if (isPythonDictString(content)) {
+      try {
+        const data = formatPythonDict(content);
+        return renderFormattedCode(data);
+      } catch (e) {
+        // Fallback to markdown
+        return renderMarkdown(content);
+      }
+    }
+
+    // Regular markdown for non-JSON/Python content
+    return renderMarkdown(content);
+  };
+
   const renderMessage = (message: Message, index: number, messages: Message[]) => {
     const isAI = message.role === 'assistant';
     const isSystem = message.role === 'system';
@@ -143,7 +280,7 @@ const ChatContent: React.FC = () => {
     const shouldShowExpand = contentHeight > maxHeight;
 
     // Skip tool responses as they'll be rendered with their calls
-    if (isTool && message.tool_call_id) {
+    if (isTool && !message.tool_call_id) {
       return null;
     }
     
@@ -172,17 +309,76 @@ const ChatContent: React.FC = () => {
                     overflow: 'hidden'
                   }}
                 >
-                  <Typography 
-                    variant="body1" 
-                    sx={{ lineHeight: 1.5 }}
+                  <Box
                     ref={el => {
                       if (el) {
-                        contentRefs.current.set(message.id, el);
+                        contentRefs.current.set(message.id, el as HTMLDivElement);
                       }
                     }}
+                    sx={{
+                      '& p': { 
+                        m: 0, 
+                        lineHeight: 1.5 
+                      },
+                      '& p + p': { 
+                        mt: 1.5 
+                      },
+                      '& pre': {
+                        p: 2,
+                        borderRadius: 1,
+                        bgcolor: theme => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.100',
+                        overflow: 'auto'
+                      },
+                      '& code': {
+                        fontFamily: 'monospace',
+                        p: 0.5,
+                        borderRadius: 0.5,
+                        bgcolor: theme => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.100',
+                      },
+                      '& pre code': {
+                        p: 0,
+                        bgcolor: 'transparent',
+                      },
+                      '& ul, & ol': {
+                        my: 0,
+                        pl: 3,
+                      },
+                      '& li + li': {
+                        mt: 0.5,
+                      },
+                      '& a': {
+                        color: 'primary.main',
+                        textDecoration: 'none',
+                        '&:hover': {
+                          textDecoration: 'underline',
+                        },
+                      },
+                      '& blockquote': {
+                        borderLeft: 4,
+                        borderColor: theme => theme.palette.mode === 'dark' ? 'grey.700' : 'grey.300',
+                        my: 1,
+                        pl: 2,
+                        ml: 0,
+                        color: 'text.secondary',
+                      },
+                      '& table': {
+                        borderCollapse: 'collapse',
+                        width: '100%',
+                        my: 2,
+                      },
+                      '& th, & td': {
+                        border: 1,
+                        borderColor: theme => theme.palette.mode === 'dark' ? 'grey.700' : 'grey.300',
+                        p: 1,
+                      },
+                      '& th': {
+                        bgcolor: theme => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.100',
+                        fontWeight: 'bold',
+                      },
+                    }}
                   >
-                    {message.content}
-                  </Typography>
+                    {renderContent(message.content)}
+                  </Box>
                   {!isExpanded && shouldShowExpand && (
                     <Box
                       sx={{
@@ -232,69 +428,33 @@ const ChatContent: React.FC = () => {
                 </Box>
               )}
 
-              {/* Tool calls with their results */}
+              {/* Tool calls */}
               {message.tool_calls && message.tool_calls.length > 0 && (
                 <Box sx={{ mt: 2 }}>
                   <Stack spacing={2}>
-                    {message.tool_calls.map((call: ToolCall) => {
-                      // Find the corresponding tool response
-                      const toolResponse = messages.find(m => 
-                        m.role === 'tool' && 
-                        m.tool_call_id === call.id
-                      );
-
-                      return (
-                        <Paper
-                          key={call.id}
-                          variant="outlined"
-                          sx={{
-                            bgcolor: (theme) => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
-                            fontFamily: 'monospace',
-                            overflow: 'hidden'
-                          }}
-                        >
-                          {/* Tool Call */}
-                          <Box sx={{ p: 2 }}>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                              <Typography 
-                                variant="body2" 
-                                sx={{ 
-                                  fontFamily: 'monospace',
-                                  color: 'primary.main',
-                                  fontWeight: 600
-                                }}
-                              >
-                                {call.function.name}
-                              </Typography>
-                              <Typography 
-                                variant="body2" 
-                                sx={{ 
-                                  fontFamily: 'monospace',
-                                  color: 'text.secondary'
-                                }}
-                              >
-                                (
-                              </Typography>
-                            </Box>
-                            <Box sx={{ ml: 2 }}>
-                              <Typography 
-                                variant="body2" 
-                                sx={{ 
-                                  fontFamily: 'monospace',
-                                  whiteSpace: 'pre-wrap',
-                                  color: 'text.secondary'
-                                }}
-                              >
-                                {(() => {
-                                  try {
-                                    const args = JSON.parse(call.function.arguments);
-                                    return JSON.stringify(args, null, 2);
-                                  } catch {
-                                    return call.function.arguments;
-                                  }
-                                })()}
-                              </Typography>
-                            </Box>
+                    {message.tool_calls.map((call) => (
+                      <Paper
+                        key={call.id}
+                        variant="outlined"
+                        sx={{
+                          bgcolor: (theme) => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
+                          fontFamily: 'monospace',
+                          overflow: 'hidden'
+                        }}
+                      >
+                        {/* Tool Call */}
+                        <Box sx={{ p: 2 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Typography 
+                              variant="body2" 
+                              sx={{ 
+                                fontFamily: 'monospace',
+                                color: 'primary.main',
+                                fontWeight: 600
+                              }}
+                            >
+                              {call.function.name}
+                            </Typography>
                             <Typography 
                               variant="body2" 
                               sx={{ 
@@ -302,36 +462,40 @@ const ChatContent: React.FC = () => {
                                 color: 'text.secondary'
                               }}
                             >
-                              );
+                              (
                             </Typography>
                           </Box>
-
-                          {/* Tool Response */}
-                          {toolResponse && (
-                            <>
-                              <Divider />
-                              <Box 
-                                sx={{ 
-                                  p: 2,
-                                  bgcolor: (theme) => theme.palette.mode === 'dark' ? 'grey.900' : 'grey.100',
-                                }}
-                              >
-                                <Typography
-                                  variant="body2"
-                                  sx={{
-                                    fontFamily: 'monospace',
-                                    whiteSpace: 'pre-wrap',
-                                    color: 'text.secondary'
-                                  }}
-                                >
-                                  {toolResponse.content}
-                                </Typography>
-                              </Box>
-                            </>
-                          )}
-                        </Paper>
-                      );
-                    })}
+                          <Box sx={{ ml: 2 }}>
+                            <Typography 
+                              variant="body2" 
+                              sx={{ 
+                                fontFamily: 'monospace',
+                                whiteSpace: 'pre-wrap',
+                                color: 'text.secondary'
+                              }}
+                            >
+                              {(() => {
+                                try {
+                                  const args = JSON.parse(call.function.arguments);
+                                  return JSON.stringify(args, null, 2);
+                                } catch {
+                                  return call.function.arguments;
+                                }
+                              })()}
+                            </Typography>
+                          </Box>
+                          <Typography 
+                            variant="body2" 
+                            sx={{ 
+                              fontFamily: 'monospace',
+                              color: 'text.secondary'
+                            }}
+                          >
+                            );
+                          </Typography>
+                        </Box>
+                      </Paper>
+                    ))}
                   </Stack>
                 </Box>
               )}
