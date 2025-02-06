@@ -1,6 +1,6 @@
-from fastapi import FastAPI, HTTPException, Query, Depends
+from fastapi import FastAPI, HTTPException, Query, Depends, WebSocket, WebSocketDisconnect, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Set
 from pydantic import BaseModel
 import uvicorn
 import os
@@ -8,6 +8,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 import weave
 import asyncpg
+import json
 
 from tyler.models.thread import Thread
 from tyler.models.message import Message
@@ -53,6 +54,7 @@ db_url = f"postgresql+asyncpg://{os.getenv('TYLER_DB_USER')}:{os.getenv('TYLER_D
 
 # Initialize ThreadStore with PostgreSQL URL
 thread_store = ThreadStore(db_url)
+
 agent = Agent(
     model_name="gpt-4o",
     purpose="To help with general questions",
@@ -62,9 +64,50 @@ agent = Agent(
     thread_store=thread_store
 )
 
+@app.on_event("startup")
+async def startup_event():
+    """Initialize the database on startup."""
+    await thread_store.initialize()
+
 # Dependency to get thread store
 async def get_thread_store():
     return thread_store
+
+# Store active WebSocket connections
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: Dict[str, Set[WebSocket]] = {}
+
+    async def connect(self, websocket: WebSocket, thread_id: str):
+        await websocket.accept()
+        if thread_id not in self.active_connections:
+            self.active_connections[thread_id] = set()
+        self.active_connections[thread_id].add(websocket)
+
+    def disconnect(self, websocket: WebSocket, thread_id: str):
+        if thread_id in self.active_connections:
+            self.active_connections[thread_id].discard(websocket)
+            if not self.active_connections[thread_id]:
+                del self.active_connections[thread_id]
+
+    async def broadcast_title_update(self, thread_id: str, thread: Thread):
+        if thread_id in self.active_connections:
+            dead_connections = set()
+            for connection in self.active_connections[thread_id]:
+                try:
+                    await connection.send_json({
+                        "type": "title_update",
+                        "thread_id": thread_id,
+                        "thread": thread.to_dict()
+                    })
+                except WebSocketDisconnect:
+                    dead_connections.add(connection)
+            
+            # Clean up dead connections
+            for dead in dead_connections:
+                self.disconnect(dead, thread_id)
+
+manager = ConnectionManager()
 
 @app.post("/threads", response_model=Thread)
 async def create_thread(
@@ -153,9 +196,35 @@ async def add_message(
     await thread_store.save(thread)
     return thread
 
+@app.websocket("/ws/threads/{thread_id}")
+async def websocket_endpoint(websocket: WebSocket, thread_id: str):
+    await manager.connect(websocket, thread_id)
+    try:
+        while True:
+            # Keep the connection alive
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket, thread_id)
+
+async def generate_and_save_title(thread_id: str, thread_store: ThreadStore, manager: ConnectionManager):
+    """Background task to generate and save title"""
+    print(f"\nBackground task starting for thread {thread_id}")
+    thread = await thread_store.get(thread_id)
+    if thread:
+        print(f"Got thread from DB - messages: {len(thread.messages)}")
+        print(f"Message roles: {[m.role for m in thread.messages]}")
+        thread.generate_title()
+        print(f"Generated title: {thread.title}")
+        print(f"After title generation - messages: {len(thread.messages)}")
+        print(f"Message roles: {[m.role for m in thread.messages]}")
+        await manager.broadcast_title_update(thread.id, thread)
+        await thread_store.save(thread)
+        print("Title saved and broadcasted")
+
 @app.post("/threads/{thread_id}/process", response_model=Thread)
 async def process_thread(
     thread_id: str,
+    background_tasks: BackgroundTasks,
     thread_store: ThreadStore = Depends(get_thread_store)
 ):
     """Process a thread with the agent"""
@@ -165,20 +234,29 @@ async def process_thread(
     
     # Count assistant messages before processing
     assistant_messages_before = len([m for m in thread.messages if m.role == "assistant"])
+    print(f"\nProcessing thread {thread_id}")
+    print(f"Initial messages: {len(thread.messages)}")
+    print(f"Message roles: {[m.role for m in thread.messages]}")
     
     processed_thread, new_messages = await agent.go(thread.id)
     
     # Update the original thread with the processed messages
     thread.messages = processed_thread.messages
+    print(f"After processing - messages: {len(thread.messages)}")
+    print(f"Message roles: {[m.role for m in thread.messages]}")
+    
+    # Save thread with new messages first
+    await thread_store.save(thread)
+    print(f"After save - messages: {len(thread.messages)}")
+    print(f"Message roles: {[m.role for m in thread.messages]}")
     
     # Count assistant messages after processing
     assistant_messages_after = len([m for m in thread.messages if m.role == "assistant"])
     
-    # Generate title only if this is the first ever assistant message
+    # Schedule title generation in background if this is the first assistant message
     if assistant_messages_before == 0 and assistant_messages_after > 0:
-        thread.generate_title()
+        background_tasks.add_task(generate_and_save_title, thread_id, thread_store, manager)
     
-    await thread_store.save(thread)
     return thread
 
 @app.get("/threads/search/attributes")

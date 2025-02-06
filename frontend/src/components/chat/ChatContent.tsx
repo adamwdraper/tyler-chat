@@ -25,7 +25,7 @@ import {
   IconChevronUp
 } from '@tabler/icons-react';
 import { useSelector } from 'react-redux';
-import { addMessage, processThread, createThread } from '@/store/chat/ChatSlice';
+import { addMessage, processThread, createThread, updateThread } from '@/store/chat/ChatSlice';
 import { RootState } from '@/store/Store';
 import { Message, Thread, ToolCall } from '@/types/chat';
 import Scrollbar from '@/components/custom-scroll/Scrollbar';
@@ -85,9 +85,37 @@ const ChatContent: React.FC = () => {
   const [contentHeights, setContentHeights] = React.useState<Map<string, number>>(new Map());
   const contentRefs = React.useRef<Map<string, HTMLDivElement>>(new Map());
   const maxHeight = 300; // About 15 lines of text
+  const wsRef = useRef<WebSocket>();
   
   const { threads, currentThread } = useSelector((state: RootState) => state.chat);
   const activeThread = threads.find((t: Thread) => t.id === currentThread);
+
+  // WebSocket connection management
+  useEffect(() => {
+    if (currentThread && activeThread?.title === 'New Chat') {
+      // Connect to WebSocket for this thread
+      const ws = new WebSocket(`ws://localhost:8000/ws/threads/${currentThread}`);
+      
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.type === 'title_update' && data.thread_id === currentThread) {
+          dispatch(updateThread(data.thread));
+        }
+      };
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+
+      wsRef.current = ws;
+
+      // Cleanup on unmount or when thread changes
+      return () => {
+        ws.close();
+        wsRef.current = undefined;
+      };
+    }
+  }, [currentThread, activeThread?.title]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

@@ -28,14 +28,13 @@ const ThreadList: React.FC<Props> = ({ showMobileSidebar }) => {
   };
 
   const handleNewChat = () => {
-    // Just set current thread to null to indicate a new chat
     dispatch(setCurrentThread(null));
     if (showMobileSidebar) {
       showMobileSidebar();
     }
   };
 
-  // Sort threads by updated_at timestamp
+  // Sort threads by updated_at timestamp in descending order (newest first)
   const sortedThreads = [...threads].sort((a, b) => {
     return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
   });
@@ -83,13 +82,6 @@ const ThreadList: React.FC<Props> = ({ showMobileSidebar }) => {
               onClick={() => handleThreadClick(thread.id)}
             />
           ))}
-          {threads.length === 0 && (
-            <Box p={3} textAlign="center">
-              <Typography color="textSecondary">
-                No conversations yet. Start a new chat!
-              </Typography>
-            </Box>
-          )}
         </List>
       </Box>
     </Box>

@@ -57,6 +57,14 @@ const chatSlice = createSlice({
     setCurrentThread: (state, action) => {
       state.currentThread = action.payload;
     },
+    updateThread: (state, action) => {
+      const threadIndex = state.threads.findIndex(t => t.id === action.payload.id);
+      if (threadIndex !== -1) {
+        state.threads[threadIndex] = action.payload;
+      } else {
+        state.threads.push(action.payload);
+      }
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -90,5 +98,5 @@ const chatSlice = createSlice({
   },
 });
 
-export const { setCurrentThread } = chatSlice.actions;
+export const { setCurrentThread, updateThread } = chatSlice.actions;
 export default chatSlice.reducer; 
