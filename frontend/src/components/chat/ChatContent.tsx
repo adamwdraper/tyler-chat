@@ -33,7 +33,7 @@ import {
 import { useSelector } from 'react-redux';
 import { addMessage, processThread, createThread, updateThread, deleteThread } from '@/store/chat/ChatSlice';
 import { RootState } from '@/store/Store';
-import { Message, Thread, ToolCall } from '@/types/chat';
+import { Message, Thread, ToolCall, TextContent, ImageContent, MessageCreate } from '@/types/chat';
 import Scrollbar from '@/components/custom-scroll/Scrollbar';
 import { useAppDispatch } from '@/hooks/useAppDispatch';
 import { formatTimeAgo } from '@/utils/dateUtils';
@@ -177,18 +177,26 @@ const ChatContent: React.FC = () => {
 
     if (!threadId) return; // Safety check
 
-    await dispatch(addMessage({
-      threadId,
-      message: {
-        role: 'user',
-        content: newMessage
-      }
-    }));
-
-    setNewMessage('');
     setIsProcessing(true);
     
     try {
+      // Create message with the new structure
+      const messageCreate: MessageCreate = {
+        role: 'user',
+        content: newMessage,
+        attributes: {},
+        attachments: []
+      };
+
+      // Wait for the message to be fully saved before processing
+      const updatedThread = await dispatch(addMessage({
+        threadId,
+        message: messageCreate
+      })).unwrap();
+
+      setNewMessage('');
+      
+      // Only process after we confirm the message was saved
       await dispatch(processThread(threadId));
     } finally {
       setIsProcessing(false);
@@ -361,70 +369,42 @@ const ChatContent: React.FC = () => {
     );
   };
 
-  const renderContent = (content: string, role: string, message: Message, messages: Message[]) => {
-    // Always render tool results in code container
-    if (role === 'tool') {
-      try {
-        // Try to parse as JSON first, then as Python dict
-        let data;
-        if (isJsonString(content)) {
-          data = JSON.parse(content);
-        } else if (isPythonDictString(content)) {
-          data = formatPythonDict(content);
-        } else {
-          // If it's not recognized as either, but starts with a curly brace, try to format it
-          const trimmed = content.trim();
-          if (trimmed.startsWith('{')) {
-            try {
-              data = formatPythonDict(content);
-            } catch {
-              data = content;
+  const renderContent = (content: string | (TextContent | ImageContent)[], role: string, message: Message, messages: Message[]) => {
+    if (typeof content === 'string') {
+      if (role === 'tool') {
+        return renderFormattedCode(content, message.name);
+      }
+      return renderMarkdown(content);
+    }
+
+    // Handle array of content
+    return (
+      <Stack spacing={2}>
+        {content.map((item, index) => {
+          if (item.type === 'text') {
+            if (role === 'tool') {
+              return renderFormattedCode(item.text, message.name);
             }
-          } else {
-            data = content;
+            return renderMarkdown(item.text);
+          } else if (item.type === 'image_url') {
+            return (
+              <Box key={index} sx={{ maxWidth: '100%', overflow: 'hidden' }}>
+                <img 
+                  src={item.image_url.url} 
+                  alt="Message content" 
+                  style={{ 
+                    maxWidth: '100%', 
+                    height: 'auto',
+                    borderRadius: theme.shape.borderRadius 
+                  }} 
+                />
+              </Box>
+            );
           }
-        }
-        
-        // Find the corresponding tool call from the previous assistant message
-        let functionName = '';
-        if (message.tool_call_id) {
-          const assistantMessage = messages.find(m => 
-            m.role === 'assistant' && 
-            m.tool_calls?.some(call => call.id === message.tool_call_id)
-          );
-          if (assistantMessage) {
-            const toolCall = assistantMessage.tool_calls?.find(call => call.id === message.tool_call_id);
-            functionName = toolCall?.function.name || '';
-          }
-        }
-        
-        return renderFormattedCode(data, functionName);
-      } catch (e) {
-        // Fallback to rendering the raw content in code container
-        return renderFormattedCode(content);
-      }
-    }
-
-    if (isJsonString(content)) {
-      try {
-        const data = JSON.parse(content);
-        return renderFormattedCode(data);
-      } catch (e) {
-        // Fallback to markdown
-        return renderMarkdown(content);
-      }
-    } else if (isPythonDictString(content)) {
-      try {
-        const data = formatPythonDict(content);
-        return renderFormattedCode(data);
-      } catch (e) {
-        // Fallback to markdown
-        return renderMarkdown(content);
-      }
-    }
-
-    // Regular markdown for non-JSON/Python content
-    return renderMarkdown(content);
+          return null;
+        })}
+      </Stack>
+    );
   };
 
   const renderMessage = (message: Message, index: number, messages: Message[]) => {
@@ -687,7 +667,21 @@ const ChatContent: React.FC = () => {
                     mt: 1
                   }}
                 >
-                  {message.timestamp ? formatTimeAgo(message.timestamp) : ''}
+                  {message.timestamp ? formatTimeAgo(message.timestamp) : ''} 
+                  {message.metrics && (
+                    <>
+                      {message.metrics.timing?.latency > 0 && (
+                        <Box component="span" sx={{ ml: 2 }}>
+                          {(message.metrics.timing.latency / 1000).toFixed(2)}s
+                        </Box>
+                      )}
+                      {message.metrics.usage?.total_tokens > 0 && (
+                        <Box component="span" sx={{ ml: 2 }}>
+                          {message.metrics.usage.total_tokens.toLocaleString()} tokens
+                        </Box>
+                      )}
+                    </>
+                  )}
                 </Typography>
               </Box>
             </Stack>
@@ -720,7 +714,8 @@ const ChatContent: React.FC = () => {
     const messageCount = activeThread.messages.length;
     const toolCalls = activeThread.messages.reduce((count, msg) => 
       count + (msg.tool_calls?.length || 0), 0);
-    const totalTokens = activeThread.metrics.total_tokens || 0;
+    const totalTokens = activeThread.messages.reduce((total, msg) => 
+      total + (msg.metrics?.usage?.total_tokens || 0), 0);
 
     return { messages: messageCount, tools: toolCalls, tokens: totalTokens };
   };

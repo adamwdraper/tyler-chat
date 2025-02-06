@@ -21,29 +21,45 @@ export interface TextContent {
   text: string;
 }
 
+export interface WeaveCall {
+  id: string;
+  trace_id: string;
+  project_id: string;
+  request_id: string;
+}
+
+export interface MessageMetrics {
+  model: string | null;
+  timing: {
+    started_at: string | null;
+    ended_at: string | null;
+    latency: number;
+  };
+  usage: {
+    completion_tokens: number;
+    prompt_tokens: number;
+    total_tokens: number;
+  };
+  weave_call: WeaveCall;
+}
+
 export interface Message {
   id: string;
-  role: string;
-  content: string | Array<TextContent | ImageContent>;
+  role: "system" | "user" | "assistant" | "tool";
+  content: string | (TextContent | ImageContent)[];
   name?: string;
   tool_call_id?: string;
   tool_calls?: ToolCall[];
   attributes: Record<string, any>;
   timestamp: string;
   source?: Record<string, any>;
-  attachments?: Array<{
+  attachments: Array<{
     filename: string;
     content: string;  // base64 string
     mime_type?: string;
     processed_content?: any;
   }>;
-  metrics: {
-    completion_tokens: number;
-    prompt_tokens: number;
-    total_tokens: number;
-    model?: string;
-    latency?: number;
-  };
+  metrics: MessageMetrics;
 }
 
 export interface Thread {
@@ -81,11 +97,16 @@ export interface ThreadCreate {
 }
 
 export interface MessageCreate {
-  role: string;
-  content: string | Array<TextContent | ImageContent>;
+  role: "system" | "user" | "assistant" | "tool";
+  content: string | (TextContent | ImageContent)[];
   name?: string;
   tool_call_id?: string;
   tool_calls?: ToolCall[];
   attributes?: Record<string, any>;
   source?: Record<string, any>;
+  attachments?: Array<{
+    filename: string;
+    content: string;
+    mime_type?: string;
+  }>;
 } 

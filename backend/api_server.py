@@ -38,7 +38,7 @@ class TextContent(BaseModel):
 
 class MessageCreate(BaseModel):
     role: str
-    content: Union[str, List[Union[TextContent, ImageContent]]]
+    content: str
     name: Optional[str] = None
     tool_call_id: Optional[str] = None
     tool_calls: Optional[list] = None
@@ -62,9 +62,9 @@ app = FastAPI(title="Tyler API", description="REST API for Tyler thread manageme
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with specific origins
+    allow_origins=["http://localhost:3000"],  # Frontend development server
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
