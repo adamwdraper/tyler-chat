@@ -255,7 +255,7 @@ const ChatContent: React.FC = () => {
     return JSON.parse(jsonified);
   };
 
-  const renderFormattedCode = (data: any) => {
+  const renderFormattedCode = (data: any, functionName?: string) => {
     return (
       <Paper
         variant="outlined"
@@ -272,7 +272,17 @@ const ChatContent: React.FC = () => {
           p: 2,
         }}
       >
-        {JSON.stringify(data, null, 2)}
+        {functionName ? (
+          <>
+            <Box component="span" sx={{ color: 'primary.main', fontWeight: 600 }}>
+              {functionName}
+            </Box>
+            {'\n\n'}
+            {JSON.stringify(data, null, 2)}
+          </>
+        ) : (
+          JSON.stringify(data, null, 2)
+        )}
       </Paper>
     );
   };
@@ -294,7 +304,7 @@ const ChatContent: React.FC = () => {
     );
   };
 
-  const renderContent = (content: string, role: string) => {
+  const renderContent = (content: string, role: string, message: Message, messages: Message[]) => {
     // Always render tool results in code container
     if (role === 'tool') {
       try {
@@ -317,7 +327,21 @@ const ChatContent: React.FC = () => {
             data = content;
           }
         }
-        return renderFormattedCode(data);
+        
+        // Find the corresponding tool call from the previous assistant message
+        let functionName = '';
+        if (message.tool_call_id) {
+          const assistantMessage = messages.find(m => 
+            m.role === 'assistant' && 
+            m.tool_calls?.some(call => call.id === message.tool_call_id)
+          );
+          if (assistantMessage) {
+            const toolCall = assistantMessage.tool_calls?.find(call => call.id === message.tool_call_id);
+            functionName = toolCall?.function.name || '';
+          }
+        }
+        
+        return renderFormattedCode(data, functionName);
       } catch (e) {
         // Fallback to rendering the raw content in code container
         return renderFormattedCode(content);
@@ -464,7 +488,7 @@ const ChatContent: React.FC = () => {
                         },
                       }}
                     >
-                      {renderContent(message.content, message.role)}
+                      {renderContent(message.content, message.role, message, messages)}
                     </Box>
                     {!isExpanded && shouldShowExpand && (
                       <Box
