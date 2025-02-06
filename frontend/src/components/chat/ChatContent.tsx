@@ -1075,7 +1075,7 @@ const ChatContent: React.FC = () => {
       </Box>
 
       <Box sx={{ p: 3, borderTop: `1px solid ${theme.palette.divider}`, bgcolor: 'background.default' }}>
-        <Stack direction="row" spacing={2}>
+        <Stack direction="row" spacing={2} alignItems="flex-end">
           <TextField
             fullWidth
             multiline
@@ -1094,6 +1094,9 @@ const ChatContent: React.FC = () => {
             disabled={!newMessage.trim() || isProcessing}
             sx={{
               bgcolor: 'primary.light',
+              width: 40,
+              height: 40,
+              flexShrink: 0,
               '&:hover': {
                 bgcolor: 'primary.main',
                 color: 'white',
