@@ -10,13 +10,16 @@ import {
   useTheme,
   Divider,
   CircularProgress,
+  Button,
 } from '@mui/material';
 import { 
   IconSend, 
   IconRobot, 
   IconUser, 
   IconCode,
-  IconDots
+  IconDots,
+  IconChevronDown,
+  IconChevronUp
 } from '@tabler/icons-react';
 import { useSelector } from 'react-redux';
 import { addMessage, processThread, createThread } from '@/store/chat/ChatSlice';
@@ -32,6 +35,10 @@ const ChatContent: React.FC = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [newMessage, setNewMessage] = React.useState('');
   const [isProcessing, setIsProcessing] = React.useState(false);
+  const [expandedMessages, setExpandedMessages] = React.useState<Set<string>>(new Set());
+  const [contentHeights, setContentHeights] = React.useState<Map<string, number>>(new Map());
+  const contentRefs = React.useRef<Map<string, HTMLElement>>(new Map());
+  const maxHeight = 200; // About 10 lines of text
   
   const { threads, currentThread } = useSelector((state: RootState) => state.chat);
   const activeThread = threads.find((t: Thread) => t.id === currentThread);
@@ -43,6 +50,16 @@ const ChatContent: React.FC = () => {
   useEffect(() => {
     scrollToBottom();
   }, [activeThread?.messages, isProcessing]);
+
+  useEffect(() => {
+    const newHeights = new Map<string, number>();
+    contentRefs.current.forEach((ref, messageId) => {
+      if (ref) {
+        newHeights.set(messageId, ref.scrollHeight);
+      }
+    });
+    setContentHeights(newHeights);
+  }, [activeThread?.messages]);
 
   const handleSendMessage = async () => {
     if (!newMessage.trim()) return;
@@ -105,10 +122,25 @@ const ChatContent: React.FC = () => {
     }
   };
 
+  const toggleMessageExpand = (messageId: string) => {
+    setExpandedMessages(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(messageId)) {
+        newSet.delete(messageId);
+      } else {
+        newSet.add(messageId);
+      }
+      return newSet;
+    });
+  };
+
   const renderMessage = (message: Message, index: number, messages: Message[]) => {
     const isAI = message.role === 'assistant';
     const isSystem = message.role === 'system';
     const isTool = message.role === 'tool';
+    const isExpanded = expandedMessages.has(message.id);
+    const contentHeight = contentHeights.get(message.id) || 0;
+    const shouldShowExpand = contentHeight > maxHeight;
 
     // Skip tool responses as they'll be rendered with their calls
     if (isTool && message.tool_call_id) {
@@ -118,166 +150,229 @@ const ChatContent: React.FC = () => {
     return (
       <Box key={message.id}>
         <Box p={3}>
-          <Stack direction="row" gap="10px" alignItems="center" mb={2}>
+          <Stack direction="row" gap="10px" mb={2}>
             <Avatar
               sx={{
                 bgcolor: getMessageColor(message.role),
                 width: 40,
                 height: 40,
-                color: 'white'
+                color: 'white',
+                alignSelf: 'flex-start'
               }}
             >
               {getMessageIcon(message.role)}
             </Avatar>
-            <Box sx={{ ml: 2 }}>
-              <Typography variant="subtitle2" fontWeight={600}>
-                {isSystem ? 'System' : isAI ? 'Tyler AI' : isTool ? message.name || 'Tool' : 'You'}
-              </Typography>
-              <Typography variant="caption" color="textSecondary">
+            <Box sx={{ flex: 1, mt: '10px' }}>
+              {/* Message content with gradient fade */}
+              {message.content && (
+                <Box
+                  sx={{
+                    position: 'relative',
+                    maxHeight: isExpanded ? 'none' : maxHeight,
+                    overflow: 'hidden'
+                  }}
+                >
+                  <Typography 
+                    variant="body1" 
+                    sx={{ lineHeight: 1.5 }}
+                    ref={el => {
+                      if (el) {
+                        contentRefs.current.set(message.id, el);
+                      }
+                    }}
+                  >
+                    {message.content}
+                  </Typography>
+                  {!isExpanded && shouldShowExpand && (
+                    <Box
+                      sx={{
+                        position: 'absolute',
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        height: '100px',
+                        background: theme.palette.mode === 'dark' 
+                          ? 'linear-gradient(180deg, transparent, rgba(33,33,33,0.9) 70%)'
+                          : 'linear-gradient(180deg, transparent, rgba(255,255,255,0.9) 70%)',
+                        display: 'flex',
+                        alignItems: 'flex-end',
+                        justifyContent: 'center',
+                        pt: 4
+                      }}
+                    >
+                      <Button
+                        size="small"
+                        variant="text"
+                        onClick={() => toggleMessageExpand(message.id)}
+                        startIcon={<IconChevronDown size={16} />}
+                        sx={{ mb: 1 }}
+                      >
+                        Show More
+                      </Button>
+                    </Box>
+                  )}
+                </Box>
+              )}
+              {isExpanded && shouldShowExpand && (
+                <Box sx={{ textAlign: 'center', mt: 1 }}>
+                  <Button
+                    size="small"
+                    variant="text"
+                    onClick={() => toggleMessageExpand(message.id)}
+                    startIcon={<IconChevronUp size={16} />}
+                  >
+                    Show Less
+                  </Button>
+                </Box>
+              )}
+
+              {/* Tool calls with their results */}
+              {message.tool_calls && message.tool_calls.length > 0 && (
+                <Box sx={{ mt: 2 }}>
+                  <Stack spacing={2}>
+                    {message.tool_calls.map((call: ToolCall) => {
+                      // Find the corresponding tool response
+                      const toolResponse = messages.find(m => 
+                        m.role === 'tool' && 
+                        m.tool_call_id === call.id
+                      );
+
+                      return (
+                        <Paper
+                          key={call.id}
+                          variant="outlined"
+                          sx={{
+                            bgcolor: (theme) => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
+                            fontFamily: 'monospace',
+                            overflow: 'hidden'
+                          }}
+                        >
+                          {/* Tool Call */}
+                          <Box sx={{ p: 2 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <Typography 
+                                variant="body2" 
+                                sx={{ 
+                                  fontFamily: 'monospace',
+                                  color: 'primary.main',
+                                  fontWeight: 600
+                                }}
+                              >
+                                {call.function.name}
+                              </Typography>
+                              <Typography 
+                                variant="body2" 
+                                sx={{ 
+                                  fontFamily: 'monospace',
+                                  color: 'text.secondary'
+                                }}
+                              >
+                                (
+                              </Typography>
+                            </Box>
+                            <Box sx={{ ml: 2 }}>
+                              <Typography 
+                                variant="body2" 
+                                sx={{ 
+                                  fontFamily: 'monospace',
+                                  whiteSpace: 'pre-wrap',
+                                  color: 'text.secondary'
+                                }}
+                              >
+                                {(() => {
+                                  try {
+                                    const args = JSON.parse(call.function.arguments);
+                                    return JSON.stringify(args, null, 2);
+                                  } catch {
+                                    return call.function.arguments;
+                                  }
+                                })()}
+                              </Typography>
+                            </Box>
+                            <Typography 
+                              variant="body2" 
+                              sx={{ 
+                                fontFamily: 'monospace',
+                                color: 'text.secondary'
+                              }}
+                            >
+                              );
+                            </Typography>
+                          </Box>
+
+                          {/* Tool Response */}
+                          {toolResponse && (
+                            <>
+                              <Divider />
+                              <Box 
+                                sx={{ 
+                                  p: 2,
+                                  bgcolor: (theme) => theme.palette.mode === 'dark' ? 'grey.900' : 'grey.100',
+                                }}
+                              >
+                                <Typography
+                                  variant="body2"
+                                  sx={{
+                                    fontFamily: 'monospace',
+                                    whiteSpace: 'pre-wrap',
+                                    color: 'text.secondary'
+                                  }}
+                                >
+                                  {toolResponse.content}
+                                </Typography>
+                              </Box>
+                            </>
+                          )}
+                        </Paper>
+                      );
+                    })}
+                  </Stack>
+                </Box>
+              )}
+
+              {/* Attachments */}
+              {message.attachments && message.attachments.length > 0 && (
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Attachments ({message.attachments.length})
+                  </Typography>
+                  <Stack direction="row" spacing={2}>
+                    {message.attachments.map((attachment, index) => (
+                      <Paper
+                        key={index}
+                        variant="outlined"
+                        sx={{
+                          p: 2,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 1
+                        }}
+                      >
+                        <Typography variant="body2">
+                          {attachment.filename}
+                        </Typography>
+                      </Paper>
+                    ))}
+                  </Stack>
+                </Box>
+              )}
+
+              {/* Timestamp - moved to end */}
+              <Typography 
+                variant="caption" 
+                color="textSecondary"
+                sx={{ 
+                  display: 'block',
+                  textAlign: 'right',
+                  mt: 1
+                }}
+              >
                 {message.timestamp ? formatDistanceToNowStrict(parseISO(message.timestamp), {
                   addSuffix: true,
                 }) : ''}
               </Typography>
             </Box>
           </Stack>
-
-          {/* Regular message content */}
-          {message.content && (
-            <Typography variant="body1" sx={{ pl: 7 }}>
-              {message.content}
-            </Typography>
-          )}
-
-          {/* Tool calls with their results */}
-          {message.tool_calls && message.tool_calls.length > 0 && (
-            <Box sx={{ pl: 7, mt: 2 }}>
-              <Stack spacing={2}>
-                {message.tool_calls.map((call: ToolCall) => {
-                  // Find the corresponding tool response
-                  const toolResponse = messages.find(m => 
-                    m.role === 'tool' && 
-                    m.tool_call_id === call.id
-                  );
-
-                  return (
-                    <Paper
-                      key={call.id}
-                      variant="outlined"
-                      sx={{
-                        bgcolor: (theme) => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
-                        fontFamily: 'monospace',
-                        overflow: 'hidden'
-                      }}
-                    >
-                      {/* Tool Call */}
-                      <Box sx={{ p: 2 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Typography 
-                            variant="body2" 
-                            sx={{ 
-                              fontFamily: 'monospace',
-                              color: 'primary.main',
-                              fontWeight: 600
-                            }}
-                          >
-                            {call.function.name}
-                          </Typography>
-                          <Typography 
-                            variant="body2" 
-                            sx={{ 
-                              fontFamily: 'monospace',
-                              color: 'text.secondary'
-                            }}
-                          >
-                            (
-                          </Typography>
-                        </Box>
-                        <Box sx={{ ml: 2 }}>
-                          <Typography 
-                            variant="body2" 
-                            sx={{ 
-                              fontFamily: 'monospace',
-                              whiteSpace: 'pre-wrap',
-                              color: 'text.secondary'
-                            }}
-                          >
-                            {(() => {
-                              try {
-                                const args = JSON.parse(call.function.arguments);
-                                return JSON.stringify(args, null, 2);
-                              } catch {
-                                return call.function.arguments;
-                              }
-                            })()}
-                          </Typography>
-                        </Box>
-                        <Typography 
-                          variant="body2" 
-                          sx={{ 
-                            fontFamily: 'monospace',
-                            color: 'text.secondary'
-                          }}
-                        >
-                          );
-                        </Typography>
-                      </Box>
-
-                      {/* Tool Response */}
-                      {toolResponse && (
-                        <>
-                          <Divider />
-                          <Box 
-                            sx={{ 
-                              p: 2,
-                              bgcolor: (theme) => theme.palette.mode === 'dark' ? 'grey.900' : 'grey.100',
-                            }}
-                          >
-                            <Typography
-                              variant="body2"
-                              sx={{
-                                fontFamily: 'monospace',
-                                whiteSpace: 'pre-wrap',
-                                color: 'text.secondary'
-                              }}
-                            >
-                              {toolResponse.content}
-                            </Typography>
-                          </Box>
-                        </>
-                      )}
-                    </Paper>
-                  );
-                })}
-              </Stack>
-            </Box>
-          )}
-
-          {/* Attachments */}
-          {message.attachments && message.attachments.length > 0 && (
-            <Box sx={{ pl: 7, mt: 2 }}>
-              <Typography variant="subtitle2" gutterBottom>
-                Attachments ({message.attachments.length})
-              </Typography>
-              <Stack direction="row" spacing={2}>
-                {message.attachments.map((attachment, index) => (
-                  <Paper
-                    key={index}
-                    variant="outlined"
-                    sx={{
-                      p: 2,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 1
-                    }}
-                  >
-                    <Typography variant="body2">
-                      {attachment.filename}
-                    </Typography>
-                  </Paper>
-                ))}
-              </Stack>
-            </Box>
-          )}
         </Box>
         <Divider />
       </Box>
