@@ -13,6 +13,7 @@ import {
   Divider,
   CircularProgress,
   Button,
+  keyframes,
 } from '@mui/material';
 import { 
   IconSend, 
@@ -31,6 +32,49 @@ import Scrollbar from '@/components/custom-scroll/Scrollbar';
 import { useAppDispatch } from '@/hooks/useAppDispatch';
 import { formatDistanceToNowStrict, parseISO } from 'date-fns';
 
+const dotAnimation = keyframes`
+  0%, 20% {
+    opacity: 0.2;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+  80%, 100% {
+    opacity: 0.2;
+    transform: translateY(0);
+  }
+`;
+
+const TypingDots: React.FC = () => {
+  return (
+    <Stack 
+      direction="row" 
+      spacing={1}
+      alignItems="center"
+      sx={{ 
+        px: 2,
+        py: 1,
+      }}
+    >
+      {[0, 1, 2].map((i) => (
+        <Box
+          key={i}
+          sx={{
+            width: 8,
+            height: 8,
+            borderRadius: '50%',
+            bgcolor: 'primary.main',
+            animation: `${dotAnimation} 2s infinite`,
+            animationDelay: `${i * 0.3}s`,
+          }}
+        />
+      ))}
+    </Stack>
+  );
+};
+
 const ChatContent: React.FC = () => {
   const theme = useTheme();
   const dispatch = useAppDispatch();
@@ -40,7 +84,7 @@ const ChatContent: React.FC = () => {
   const [expandedMessages, setExpandedMessages] = React.useState<Set<string>>(new Set());
   const [contentHeights, setContentHeights] = React.useState<Map<string, number>>(new Map());
   const contentRefs = React.useRef<Map<string, HTMLDivElement>>(new Map());
-  const maxHeight = 200; // About 10 lines of text
+  const maxHeight = 300; // About 15 lines of text
   
   const { threads, currentThread } = useSelector((state: RootState) => state.chat);
   const activeThread = threads.find((t: Thread) => t.id === currentThread);
@@ -278,6 +322,7 @@ const ChatContent: React.FC = () => {
     const isExpanded = expandedMessages.has(message.id);
     const contentHeight = contentHeights.get(message.id) || 0;
     const shouldShowExpand = contentHeight > maxHeight;
+    const isLastMessage = index === messages.length - 1;
 
     // Skip tool responses as they'll be rendered with their calls
     if (isTool && !message.tool_call_id) {
@@ -409,7 +454,7 @@ const ChatContent: React.FC = () => {
                           }
                         }}
                       >
-                        Show More
+                        More
                       </Button>
                     </Box>
                   )}
@@ -423,7 +468,7 @@ const ChatContent: React.FC = () => {
                     onClick={() => toggleMessageExpand(message.id)}
                     startIcon={<IconChevronUp size={16} />}
                   >
-                    Show Less
+                    Less
                   </Button>
                 </Box>
               )}
@@ -544,7 +589,7 @@ const ChatContent: React.FC = () => {
             </Box>
           </Stack>
         </Box>
-        <Divider />
+        {!isLastMessage && <Divider />}
       </Box>
     );
   };
@@ -552,35 +597,10 @@ const ChatContent: React.FC = () => {
   const renderLoadingMessage = () => (
     <Box>
       <Box p={3}>
-        <Stack direction="row" gap="10px" alignItems="center" mb={2}>
-          <Avatar
-            sx={{
-              bgcolor: 'primary.main',
-              width: 40,
-              height: 40,
-              color: 'white'
-            }}
-          >
-            <IconRobot size={24} />
-          </Avatar>
-          <Box sx={{ ml: 2 }}>
-            <Typography variant="subtitle2" fontWeight={600}>
-              Tyler AI
-            </Typography>
-            <Typography variant="caption" color="textSecondary">
-              Thinking...
-            </Typography>
-          </Box>
+        <Stack direction="row" justifyContent="center">
+          <TypingDots />
         </Stack>
-
-        <Box sx={{ pl: 7, display: 'flex', alignItems: 'center', gap: 1 }}>
-          <CircularProgress size={16} />
-          <Typography variant="body2" color="textSecondary">
-            Generating response...
-          </Typography>
-        </Box>
       </Box>
-      <Divider />
     </Box>
   );
 
