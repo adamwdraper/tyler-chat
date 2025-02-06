@@ -70,16 +70,38 @@ export interface Thread {
   source?: Record<string, any>;
   created_at: string;
   updated_at: string;
-  metrics: {
-    completion_tokens: number;
-    prompt_tokens: number;
-    total_tokens: number;
-    model_usage: Record<string, {
-      calls: number;
+  get_total_tokens(): {
+    overall: {
+      completion_tokens: number;
+      prompt_tokens: number;
+      total_tokens: number;
+    };
+    by_model: Record<string, {
       completion_tokens: number;
       prompt_tokens: number;
       total_tokens: number;
     }>;
+  };
+  get_model_usage(model_name?: string): Record<string, {
+    calls: number;
+    completion_tokens: number;
+    prompt_tokens: number;
+    total_tokens: number;
+  }>;
+  get_message_timing_stats(): {
+    total_latency: number;
+    average_latency: number;
+    message_count: number;
+  };
+  get_message_counts(): {
+    system: number;
+    user: number;
+    assistant: number;
+    tool: number;
+  };
+  get_tool_usage(): {
+    tools: Record<string, number>;
+    total_calls: number;
   };
 }
 

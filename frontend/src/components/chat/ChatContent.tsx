@@ -672,9 +672,35 @@ const ChatContent: React.FC = () => {
                   {message.metrics && (
                     <>
                       {message.metrics.usage?.total_tokens > 0 && (
-                        <Box component="span">
-                          {message.metrics.usage.total_tokens.toLocaleString()} tokens
-                        </Box>
+                        <Tooltip
+                          title={
+                            <Box sx={{ p: 1, fontFamily: 'monospace' }}>
+                              <Box sx={{ color: 'primary.light', mb: 0.5 }}>
+                                {message.metrics.model || 'Unknown Model'}:
+                              </Box>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+                                <span>Prompt:</span>
+                                <span>{message.metrics.usage.prompt_tokens.toLocaleString()}</span>
+                              </Box>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+                                <span>Completion:</span>
+                                <span>{message.metrics.usage.completion_tokens.toLocaleString()}</span>
+                              </Box>
+                              <Divider sx={{ my: 0.5 }} />
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'primary.light' }}>
+                                <span>Total:</span>
+                                <span>{message.metrics.usage.total_tokens.toLocaleString()}</span>
+                              </Box>
+                            </Box>
+                          }
+                          arrow
+                          placement="top"
+                        >
+                          <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'default' }}>
+                            <IconPlaystationCircle size={14} />
+                            {message.metrics.usage.total_tokens.toLocaleString()}
+                          </Box>
+                        </Tooltip>
                       )}
                       {message.metrics.timing?.latency > 0 && (
                         <Box component="span">
@@ -716,12 +742,91 @@ const ChatContent: React.FC = () => {
     if (!activeThread) return { messages: 0, tools: 0, tokens: 0 };
     
     const messageCount = activeThread.messages.length;
+    
+    // Calculate tool usage
     const toolCalls = activeThread.messages.reduce((count, msg) => 
       count + (msg.tool_calls?.length || 0), 0);
+    
+    // Calculate total tokens
     const totalTokens = activeThread.messages.reduce((total, msg) => 
       total + (msg.metrics?.usage?.total_tokens || 0), 0);
 
-    return { messages: messageCount, tools: toolCalls, tokens: totalTokens };
+    return { 
+      messages: messageCount, 
+      tools: toolCalls, 
+      tokens: totalTokens 
+    };
+  };
+
+  const calculateTokenUsage = () => {
+    if (!activeThread) return { overall: { total_tokens: 0, prompt_tokens: 0, completion_tokens: 0 }, modelUsage: {} };
+    
+    const modelUsage: Record<string, {
+      calls: number;
+      completion_tokens: number;
+      prompt_tokens: number;
+      total_tokens: number;
+    }> = {};
+    
+    let overall = {
+      completion_tokens: 0,
+      prompt_tokens: 0,
+      total_tokens: 0
+    };
+    
+    for (const message of activeThread.messages) {
+      const metrics = message.metrics;
+      if (!metrics?.usage) continue;
+      
+      // Update overall counts
+      overall.completion_tokens += metrics.usage.completion_tokens || 0;
+      overall.prompt_tokens += metrics.usage.prompt_tokens || 0;
+      overall.total_tokens += metrics.usage.total_tokens || 0;
+      
+      // Update per-model counts
+      if (metrics.model) {
+        if (!modelUsage[metrics.model]) {
+          modelUsage[metrics.model] = {
+            calls: 0,
+            completion_tokens: 0,
+            prompt_tokens: 0,
+            total_tokens: 0
+          };
+        }
+        
+        modelUsage[metrics.model].calls += 1;
+        modelUsage[metrics.model].completion_tokens += metrics.usage.completion_tokens || 0;
+        modelUsage[metrics.model].prompt_tokens += metrics.usage.prompt_tokens || 0;
+        modelUsage[metrics.model].total_tokens += metrics.usage.total_tokens || 0;
+      }
+    }
+    
+    return {
+      overall,
+      modelUsage
+    };
+  };
+
+  const calculateToolUsage = () => {
+    if (!activeThread) return { tools: {}, total_calls: 0 };
+    
+    const toolCounts: Record<string, number> = {};
+    let totalCalls = 0;
+    
+    for (const message of activeThread.messages) {
+      if (message.tool_calls) {
+        for (const call of message.tool_calls) {
+          const toolName = call.function.name;
+          toolCounts[toolName] = (toolCounts[toolName] || 0) + 1;
+          totalCalls += 1;
+        }
+      }
+    }
+    
+    return {
+      tools: toolCounts,
+      total_calls: totalCalls
+    };
   };
 
   return (
@@ -749,16 +854,119 @@ const ChatContent: React.FC = () => {
               </Typography>
             </Stack>
             <Stack direction="row" spacing={1} alignItems="center">
-              <IconTool size={20} style={{ color: theme.palette.secondary.main }} />
-              <Typography variant="body2">
-                {calculateMetrics().tools}
-              </Typography>
+              <Tooltip
+                title={
+                  <Box sx={{ p: 1, fontFamily: 'monospace' }}>
+                    {activeThread && (() => {
+                      const { tools, total_calls } = calculateToolUsage();
+                      const toolNames = Object.keys(tools);
+                      
+                      return (
+                        <>
+                          <Box sx={{ color: 'primary.light', mb: 0.5 }}>Tool Usage:</Box>
+                          {toolNames.map((toolName) => (
+                            <Box key={toolName} sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+                              <span>{toolName}:</span>
+                              <span>{tools[toolName]}</span>
+                            </Box>
+                          ))}
+                          {toolNames.length > 1 && (
+                            <>
+                              <Divider sx={{ my: 0.5 }} />
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'primary.light' }}>
+                                <span>Total:</span>
+                                <span>{total_calls}</span>
+                              </Box>
+                            </>
+                          )}
+                          {toolNames.length === 0 && (
+                            <Box sx={{ color: 'text.secondary' }}>No tools used</Box>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </Box>
+                }
+                arrow
+                placement="top"
+              >
+                <Stack direction="row" spacing={1} alignItems="center" sx={{ cursor: 'default' }}>
+                  <IconTool size={20} style={{ color: theme.palette.secondary.main }} />
+                  <Typography variant="body2">
+                    {calculateMetrics().tools}
+                  </Typography>
+                </Stack>
+              </Tooltip>
             </Stack>
             <Stack direction="row" spacing={1} alignItems="center">
-              <IconPlaystationCircle size={20} style={{ color: theme.palette.warning.main }} />
-              <Typography variant="body2">
-                {calculateMetrics().tokens.toLocaleString()}
-              </Typography>
+              <Tooltip
+                title={
+                  <Box sx={{ p: 1, fontFamily: 'monospace' }}>
+                    {activeThread && (() => {
+                      const { modelUsage, overall } = calculateTokenUsage();
+                      const modelCount = Object.keys(modelUsage).length;
+                      
+                      return (
+                        <>
+                          <Box sx={{ color: 'primary.light', mb: 0.5 }}>Token Usage by Model:</Box>
+                          {Object.entries(modelUsage || {}).map(([model, usage]) => (
+                            <Box key={model}>
+                              <Box sx={{ color: 'primary.light', mt: 1, mb: 0.5 }}>
+                                {model}:
+                              </Box>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+                                <span>Prompt:</span>
+                                <span>{usage.prompt_tokens.toLocaleString()}</span>
+                              </Box>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+                                <span>Completion:</span>
+                                <span>{usage.completion_tokens.toLocaleString()}</span>
+                              </Box>
+                              <Divider sx={{ my: 0.5 }} />
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+                                <span>Total:</span>
+                                <span>{usage.total_tokens.toLocaleString()}</span>
+                              </Box>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'text.secondary', fontSize: '0.85em' }}>
+                                <span>Calls:</span>
+                                <span>{usage.calls}</span>
+                              </Box>
+                              {modelCount > 1 && <Divider sx={{ my: 1 }} />}
+                            </Box>
+                          ))}
+                          {modelCount > 1 && (
+                            <Box sx={{ mt: 1 }}>
+                              <Box sx={{ color: 'primary.light', mb: 0.5 }}>Overall Usage:</Box>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+                                <span>Prompt:</span>
+                                <span>{overall.prompt_tokens.toLocaleString()}</span>
+                              </Box>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+                                <span>Completion:</span>
+                                <span>{overall.completion_tokens.toLocaleString()}</span>
+                              </Box>
+                              <Divider sx={{ my: 0.5 }} />
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'primary.light' }}>
+                                <span>Total:</span>
+                                <span>{overall.total_tokens.toLocaleString()}</span>
+                              </Box>
+                            </Box>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </Box>
+                }
+                arrow
+                placement="top"
+              >
+                <Stack direction="row" spacing={1} alignItems="center" sx={{ cursor: 'default' }}>
+                  <IconPlaystationCircle size={20} style={{ color: theme.palette.warning.main }} />
+                  <Typography variant="body2">
+                    {calculateMetrics().tokens.toLocaleString()}
+                  </Typography>
+                </Stack>
+              </Tooltip>
             </Stack>
           </Stack>
         )}
