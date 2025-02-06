@@ -211,12 +211,7 @@ async def generate_and_save_title(thread_id: str, thread_store: ThreadStore, man
     print(f"\nBackground task starting for thread {thread_id}")
     thread = await thread_store.get(thread_id)
     if thread:
-        print(f"Got thread from DB - messages: {len(thread.messages)}")
-        print(f"Message roles: {[m.role for m in thread.messages]}")
         thread.generate_title()
-        print(f"Generated title: {thread.title}")
-        print(f"After title generation - messages: {len(thread.messages)}")
-        print(f"Message roles: {[m.role for m in thread.messages]}")
         await manager.broadcast_title_update(thread.id, thread)
         await thread_store.save(thread)
         print("Title saved and broadcasted")
@@ -235,20 +230,14 @@ async def process_thread(
     # Count assistant messages before processing
     assistant_messages_before = len([m for m in thread.messages if m.role == "assistant"])
     print(f"\nProcessing thread {thread_id}")
-    print(f"Initial messages: {len(thread.messages)}")
-    print(f"Message roles: {[m.role for m in thread.messages]}")
     
     processed_thread, new_messages = await agent.go(thread.id)
     
     # Update the original thread with the processed messages
     thread.messages = processed_thread.messages
-    print(f"After processing - messages: {len(thread.messages)}")
-    print(f"Message roles: {[m.role for m in thread.messages]}")
     
     # Save thread with new messages first
     await thread_store.save(thread)
-    print(f"After save - messages: {len(thread.messages)}")
-    print(f"Message roles: {[m.role for m in thread.messages]}")
     
     # Count assistant messages after processing
     assistant_messages_after = len([m for m in thread.messages if m.role == "assistant"])

@@ -39,11 +39,20 @@ const dotAnimation = keyframes`
   }
   50% {
     opacity: 1;
-    transform: translateY(-2px);
+    transform: translateY(-6px);
   }
   80%, 100% {
     opacity: 0.2;
     transform: translateY(0);
+  }
+`;
+
+const titleTypingAnimation = keyframes`
+  0% {
+    clip-path: inset(0 100% 0 0);
+  }
+  100% {
+    clip-path: inset(0 0 0 0);
   }
 `;
 
@@ -83,6 +92,7 @@ const ChatContent: React.FC = () => {
   const [isProcessing, setIsProcessing] = React.useState(false);
   const [expandedMessages, setExpandedMessages] = React.useState<Set<string>>(new Set());
   const [contentHeights, setContentHeights] = React.useState<Map<string, number>>(new Map());
+  const [isNewTitle, setIsNewTitle] = React.useState(false);
   const contentRefs = React.useRef<Map<string, HTMLDivElement>>(new Map());
   const maxHeight = 300; // About 15 lines of text
   const wsRef = useRef<WebSocket>();
@@ -99,7 +109,10 @@ const ChatContent: React.FC = () => {
       ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
         if (data.type === 'title_update' && data.thread_id === currentThread) {
+          setIsNewTitle(true);
           dispatch(updateThread(data.thread));
+          // Reset the animation flag after animation duration
+          setTimeout(() => setIsNewTitle(false), 2000);
         }
       };
 
@@ -681,14 +694,7 @@ const ChatContent: React.FC = () => {
 
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: 'background.paper' }}>
-      {activeThread && (
-        <Box sx={{ p: 3, borderBottom: `1px solid ${theme.palette.divider}` }}>
-          <Typography variant="h6">
-            {activeThread.title || 'New Chat'}
-          </Typography>
-        </Box>
-      )}
-
+      <Box sx={{ p: 3, borderBottom: `1px solid ${theme.palette.divider}` }} />
       <Box sx={{ flexGrow: 1, overflow: 'hidden' }}>
         <Scrollbar>
           {activeThread?.messages.map((message, index, messages) => 
