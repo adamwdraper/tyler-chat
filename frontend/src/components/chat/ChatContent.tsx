@@ -657,32 +657,36 @@ const ChatContent: React.FC = () => {
                   </Box>
                 )}
 
-                {/* Timestamp */}
-                <Typography 
-                  variant="caption" 
-                  color="textSecondary"
+                {/* Timestamp and Metrics */}
+                <Box 
                   sx={{ 
-                    display: 'block',
-                    textAlign: 'right',
-                    mt: 1
+                    display: 'flex',
+                    justifyContent: 'flex-end',
+                    alignItems: 'center',
+                    mt: 1,
+                    gap: 2,
+                    color: 'text.secondary',
+                    typography: 'caption',
                   }}
                 >
-                  {message.timestamp ? formatTimeAgo(message.timestamp) : ''} 
                   {message.metrics && (
                     <>
-                      {message.metrics.timing?.latency > 0 && (
-                        <Box component="span" sx={{ ml: 2 }}>
-                          {(message.metrics.timing.latency / 1000).toFixed(2)}s
+                      {message.metrics.usage?.total_tokens > 0 && (
+                        <Box component="span">
+                          {message.metrics.usage.total_tokens.toLocaleString()} tokens
                         </Box>
                       )}
-                      {message.metrics.usage?.total_tokens > 0 && (
-                        <Box component="span" sx={{ ml: 2 }}>
-                          {message.metrics.usage.total_tokens.toLocaleString()} tokens
+                      {message.metrics.timing?.latency > 0 && (
+                        <Box component="span">
+                          {(message.metrics.timing.latency / 1000).toFixed(2)}s
                         </Box>
                       )}
                     </>
                   )}
-                </Typography>
+                  <Box component="span">
+                    {message.timestamp ? formatTimeAgo(message.timestamp) : ''}
+                  </Box>
+                </Box>
               </Box>
             </Stack>
           </Box>
