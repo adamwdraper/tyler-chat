@@ -1182,14 +1182,17 @@ const ChatContent: React.FC = () => {
     const getFileUrl = (attachment: typeof selectedAttachment) => {
       // If we have a storage path, construct the URL to the actual file
       if (attachment.storage_path) {
-        // Use relative URL to access files from project root
         return `/files/${attachment.storage_path}`;
+      }
+      // Fallback to base64 content if available
+      if (attachment.content) {
+        return `data:${attachment.mime_type || 'application/octet-stream'};base64,${attachment.content}`;
       }
       return null;
     };
 
     const renderContent = () => {
-      if (!selectedAttachment.processed_content) {
+      if (!selectedAttachment.storage_path && !selectedAttachment.processed_content && !selectedAttachment.content) {
         return (
           <Box sx={{ p: 2, textAlign: 'center' }}>
             <Typography variant="body2" color="text.secondary">
@@ -1203,16 +1206,21 @@ const ChatContent: React.FC = () => {
 
       // Handle images
       if (selectedAttachment.mime_type?.startsWith('image/')) {
-        const imageUrl = fileUrl || getImageUrl(selectedAttachment.processed_content, selectedAttachment.mime_type);
-        return imageUrl ? (
+        return fileUrl ? (
           <img 
-            src={imageUrl}
+            src={fileUrl}
             alt={selectedAttachment.filename}
             style={{ 
               maxWidth: '100%',
               height: 'auto',
               display: 'block',
               margin: '0 auto'
+            }}
+            onError={(e) => {
+              console.error('Image failed to load:', {
+                src: fileUrl,
+                error: e
+              });
             }}
           />
         ) : (
@@ -1222,7 +1230,7 @@ const ChatContent: React.FC = () => {
         );
       }
 
-      // Handle PDFs
+      // Handle PDFs and other documents that can be displayed in an iframe
       if (selectedAttachment.mime_type === 'application/pdf') {
         if (fileUrl) {
           return (
@@ -1230,73 +1238,101 @@ const ChatContent: React.FC = () => {
               width: '100%',
               height: 'calc(90vh - 200px)',
               minHeight: '500px',
-              '& iframe': {
-                border: 'none',
-                width: '100%',
-                height: '100%'
-              }
+              overflow: 'hidden',
+              borderRadius: 1,
+              border: 1,
+              borderColor: 'divider'
             }}>
-              <iframe 
-                src={fileUrl} 
-                title={selectedAttachment.filename}
-              />
+              <object
+                data={fileUrl}
+                type="application/pdf"
+                style={{
+                  width: '100%',
+                  height: '100%'
+                }}
+              >
+                <Box sx={{ p: 2, textAlign: 'center' }}>
+                  <Typography variant="body2" color="text.secondary" gutterBottom>
+                    Unable to display PDF directly.
+                  </Typography>
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    href={fileUrl}
+                    download={selectedAttachment.filename}
+                    startIcon={<IconPaperclip size={20} />}
+                  >
+                    Download PDF
+                  </Button>
+                </Box>
+              </object>
             </Box>
           );
         }
-        
-        // Fallback to text content if file URL not available
-        const pdfContent = selectedAttachment.processed_content?.text || 
-                          selectedAttachment.processed_content?.overview;
-        return (
-          <Box sx={{ 
-            p: 3,
-            bgcolor: theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
-            borderRadius: 1,
-            fontFamily: 'monospace',
-            fontSize: '0.875rem',
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-word'
-          }}>
-            {pdfContent || 'No text content available'}
-          </Box>
-        );
       }
 
       // Handle text files
-      if (selectedAttachment.mime_type?.startsWith('text/')) {
+      if (
+        selectedAttachment.mime_type === 'text/plain' ||
+        selectedAttachment.mime_type === 'text/csv' ||
+        selectedAttachment.mime_type === 'application/json'
+      ) {
         if (fileUrl) {
+          // For text files, fetch and display content directly
+          const [content, setContent] = useState<string | null>(null);
+          const [error, setError] = useState<string | null>(null);
+
+          useEffect(() => {
+            fetch(fileUrl)
+              .then(response => response.text())
+              .then(text => setContent(text))
+              .catch(err => {
+                console.error('Error fetching text content:', err);
+                setError('Failed to load file content');
+              });
+          }, [fileUrl]);
+
+          if (error) {
+            return (
+              <Alert severity="error" sx={{ mt: 2 }}>
+                {error}
+              </Alert>
+            );
+          }
+
+          if (!content) {
+            return (
+              <Box sx={{ p: 2, textAlign: 'center' }}>
+                <CircularProgress size={24} />
+              </Box>
+            );
+          }
+
           return (
-            <Box 
-              component="iframe"
-              src={fileUrl}
-              title={selectedAttachment.filename}
-              sx={{ 
-                width: '100%',
-                height: 'calc(90vh - 200px)',
-                border: 'none',
-                borderRadius: 1,
-                bgcolor: theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50'
-              }}
-            />
+            <Box sx={{ 
+              p: 3,
+              bgcolor: theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
+              borderRadius: 1,
+              border: 1,
+              borderColor: 'divider',
+              maxHeight: 'calc(90vh - 200px)',
+              overflow: 'auto'
+            }}>
+              <pre style={{ 
+                margin: 0,
+                fontFamily: 'monospace',
+                fontSize: '0.875rem',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word'
+              }}>
+                {content}
+              </pre>
+            </Box>
           );
         }
-        
-        return (
-          <Box sx={{ 
-            p: 3,
-            bgcolor: theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
-            borderRadius: 1,
-            fontFamily: 'monospace',
-            fontSize: '0.875rem',
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-word'
-          }}>
-            {selectedAttachment.processed_content.text || 'No text content available'}
-          </Box>
-        );
       }
-
-      // For other file types, show download button and processed content
+      
+      // For all other files or when direct viewing is not possible
       return (
         <Stack spacing={2}>
           {fileUrl && (
@@ -1313,14 +1349,29 @@ const ChatContent: React.FC = () => {
             </Box>
           )}
           
-          {selectedAttachment.processed_content.overview && (
+          {/* Show processed content if available */}
+          {selectedAttachment.processed_content?.overview && (
             <Box>
               <Typography variant="subtitle2" color="text.secondary">Overview</Typography>
               <Typography variant="body2">{selectedAttachment.processed_content.overview}</Typography>
             </Box>
           )}
           
-          {selectedAttachment.processed_content.analysis && (
+          {selectedAttachment.processed_content?.text && (
+            <Box sx={{ 
+              p: 3,
+              bgcolor: theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
+              borderRadius: 1,
+              fontFamily: 'monospace',
+              fontSize: '0.875rem',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word'
+            }}>
+              {selectedAttachment.processed_content.text}
+            </Box>
+          )}
+          
+          {selectedAttachment.processed_content?.analysis && (
             <Box>
               <Typography variant="subtitle2" color="text.secondary">Analysis</Typography>
               <Stack spacing={1}>
@@ -1336,7 +1387,7 @@ const ChatContent: React.FC = () => {
             </Box>
           )}
 
-          {selectedAttachment.processed_content.error && (
+          {selectedAttachment.processed_content?.error && (
             <Alert severity="error">
               {selectedAttachment.processed_content.error}
             </Alert>
@@ -1353,19 +1404,19 @@ const ChatContent: React.FC = () => {
       >
         <Box sx={{
           position: 'absolute',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          width: '90%',
-          maxWidth: 800,
-          maxHeight: '90vh',
+          top: '2%',  // Small margin from top
+          left: '2%',  // Small margin from left
+          right: '2%', // Small margin from right
+          bottom: '2%', // Small margin from bottom
           bgcolor: 'background.paper',
           boxShadow: 24,
           p: 4,
           borderRadius: 1,
-          overflow: 'auto'
+          overflow: 'hidden', // Changed from 'auto' to 'hidden'
+          display: 'flex',
+          flexDirection: 'column'
         }}>
-          <Stack spacing={2}>
+          <Stack spacing={2} sx={{ height: '100%', overflow: 'hidden' }}>
             <Stack direction="row" justifyContent="space-between" alignItems="center">
               <Stack direction="row" spacing={1} alignItems="center">
                 <Typography variant="h6" component="h2">
@@ -1381,8 +1432,9 @@ const ChatContent: React.FC = () => {
             </Stack>
             <Divider />
             <Box sx={{ 
+              flexGrow: 1,
               overflow: 'auto',
-              maxHeight: 'calc(90vh - 140px)'
+              minHeight: 0 // Important for proper flex behavior
             }}>
               {renderContent()}
             </Box>
