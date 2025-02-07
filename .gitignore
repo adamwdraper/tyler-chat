@@ -39,7 +39,7 @@ yarn-error.log*
 .env.*
 !.env.example
 modernize/
-tyler/
+backend/files/
 
 # Distribution / packaging
 *.egg-info/

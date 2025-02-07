@@ -15,6 +15,7 @@ import base64
 import logging
 from sqlalchemy.orm import selectinload
 from sqlalchemy import select
+from contextlib import asynccontextmanager
 
 from tyler.models.thread import Thread
 from tyler.models.message import Message, Attachment
@@ -64,8 +65,29 @@ class ThreadUpdate(BaseModel):
     title: Optional[str] = None
     attributes: Optional[Dict[str, Any]] = None
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for database and file store initialization."""
+    logger.info("Initializing thread store...")
+    await thread_store.initialize()
+    
+    # Verify file store is accessible
+    logger.info("Checking file store health...")
+    file_store = FileStore()
+    logger.info(f"Initialized file store at: {file_store.base_path}")
+    health = await file_store.check_health()
+    if not health['healthy']:
+        logger.error(f"File store health check failed: {health['errors']}")
+        raise RuntimeError("File store initialization failed")
+    logger.info(f"File store health check passed. Storage size: {health['total_size']} bytes, Files: {health['file_count']}")
+    yield
+
 # Initialize FastAPI app
-app = FastAPI(title="Tyler API", description="REST API for Tyler thread management")
+app = FastAPI(
+    title="Tyler API", 
+    description="REST API for Tyler thread management",
+    lifespan=lifespan
+)
 
 # Add CORS middleware
 app.add_middleware(
@@ -85,6 +107,7 @@ thread_store = ThreadStore(db_url)
 
 # Initialize file store
 file_store = FileStore()
+logger.info(f"Initialized file store at: {file_store.base_path}")
 
 agent = Agent(
     model_name="gpt-4o",
@@ -94,16 +117,6 @@ agent = Agent(
     ],
     thread_store=thread_store
 )
-
-@app.on_event("startup")
-async def startup_event():
-    """Initialize the database and file store on startup."""
-    await thread_store.initialize()
-    # Verify file store is accessible
-    health = await file_store.check_health()
-    if not health['healthy']:
-        logger.error(f"File store health check failed: {health['errors']}")
-        raise RuntimeError("File store initialization failed")
 
 # Dependency to get thread store
 async def get_thread_store():
@@ -259,7 +272,7 @@ async def add_message(
     )
     thread.add_message(new_message)
     
-    # Save thread - this will handle storing files
+    # Save thread
     await thread_store.save(thread)
     
     # Convert thread to dict and return as JSON response
