@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   ListItemButton,
   Typography,
@@ -6,8 +6,9 @@ import {
   Box,
   keyframes,
 } from '@mui/material';
-import { Thread } from '@/types/chat';
+import { Thread, TextContent, ImageContent } from '@/types/chat';
 import { formatTimeAgo } from '@/utils/dateUtils';
+import { useTimeAgoUpdater } from '@/hooks/useTimeAgoUpdater';
 
 const titleTypingAnimation = keyframes`
   0% {
@@ -29,6 +30,20 @@ const ThreadListItem: React.FC<Props> = ({ thread, isSelected, onClick }) => {
   const [isNewTitle, setIsNewTitle] = useState(false);
   const [displayTitle, setDisplayTitle] = useState(thread.title);
   const [prevTitle, setPrevTitle] = useState(thread.title);
+  const [timeAgo, setTimeAgo] = useState(thread.updated_at ? formatTimeAgo(thread.updated_at) : '');
+
+  // Callback to update the time ago display
+  const updateTimeAgo = useCallback(() => {
+    setTimeAgo(thread.updated_at ? formatTimeAgo(thread.updated_at) : '');
+  }, [thread.updated_at]);
+
+  // Use the custom hook for periodic updates
+  useTimeAgoUpdater(updateTimeAgo);
+
+  useEffect(() => {
+    // Update time ago when thread.updated_at changes
+    updateTimeAgo();
+  }, [thread.updated_at, updateTimeAgo]);
 
   useEffect(() => {
     if (thread.title !== prevTitle && thread.title !== 'New Chat') {
@@ -42,6 +57,16 @@ const ThreadListItem: React.FC<Props> = ({ thread, isSelected, onClick }) => {
       }, 50);
     }
   }, [thread.title, prevTitle]);
+
+  const getMessageContent = (content: string | (TextContent | ImageContent)[]) => {
+    if (typeof content === 'string') {
+      return content;
+    }
+    return content
+      .filter(item => item.type === 'text')
+      .map(item => (item as TextContent).text)
+      .join(' ');
+  };
   
   return (
     <ListItemButton 
@@ -86,7 +111,7 @@ const ThreadListItem: React.FC<Props> = ({ thread, isSelected, onClick }) => {
             )}
           </Box>
           <Typography variant="caption" color="textSecondary">
-            {thread.updated_at ? formatTimeAgo(thread.updated_at) : ''}
+            {timeAgo}
           </Typography>
         </Stack>
         {lastMessage && (
@@ -101,7 +126,7 @@ const ThreadListItem: React.FC<Props> = ({ thread, isSelected, onClick }) => {
               WebkitBoxOrient: 'vertical',
             }}
           >
-            {lastMessage.content}
+            {getMessageContent(lastMessage.content)}
           </Typography>
         )}
       </Box>

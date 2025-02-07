@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
@@ -42,6 +42,7 @@ import { Message, Thread, ToolCall, TextContent, ImageContent, MessageCreate } f
 import Scrollbar from '@/components/custom-scroll/Scrollbar';
 import { useAppDispatch } from '@/hooks/useAppDispatch';
 import { formatTimeAgo } from '@/utils/dateUtils';
+import { useTimeAgoUpdater } from '@/hooks/useTimeAgoUpdater';
 
 const dotAnimation = keyframes`
   0%, 20% {
@@ -110,9 +111,17 @@ const ChatContent: React.FC = () => {
   const wsRef = useRef<WebSocket>();
   const [copiedMessageId, setCopiedMessageId] = React.useState<string | null>(null);
   const [plainTextMessages, setPlainTextMessages] = React.useState<Set<string>>(new Set());
+  const [forceUpdate, setForceUpdate] = React.useState(0);
   
   const { threads, currentThread } = useSelector((state: RootState) => state.chat);
   const activeThread = threads.find((t: Thread) => t.id === currentThread);
+
+  // Use the custom hook for periodic updates
+  const updateTimestamps = useCallback(() => {
+    setForceUpdate(prev => prev + 1);
+  }, []);
+
+  useTimeAgoUpdater(updateTimestamps);
 
   // Sort messages by sequence
   const sortedMessages = React.useMemo(() => {
