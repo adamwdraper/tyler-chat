@@ -261,6 +261,7 @@ const ChatContent: React.FC = () => {
           const base64Content = await new Promise<string>((resolve) => {
             const reader = new FileReader();
             reader.onloadend = () => {
+              // Extract only the base64 part after the data URL prefix
               const base64 = (reader.result as string).split(',')[1];
               resolve(base64);
             };
@@ -270,27 +271,48 @@ const ChatContent: React.FC = () => {
           return {
             filename: file.name,
             content: base64Content,
-            mime_type: file.type
+            mime_type: file.type,
+            processed_content: null // Let the backend handle processing
           };
         })
       );
 
+      console.log('Sending message with attachments:', {
+        threadId,
+        messageContent: newMessage,
+        attachmentsCount: fileAttachments.length,
+        attachmentDetails: fileAttachments.map(a => ({
+          filename: a.filename,
+          mime_type: a.mime_type,
+          contentLength: a.content.length
+        }))
+      });
+
+      // Create message with the new structure
       const messageCreate: MessageCreate = {
         role: 'user',
-        content: newMessage,
+        content: newMessage || '', // Ensure content is never undefined
         attributes: {},
         attachments: fileAttachments
       };
 
-      await dispatch(addMessage({
+      const result = await dispatch(addMessage({
         threadId,
         message: messageCreate
       })).unwrap();
+
+      console.log('Message sent successfully:', {
+        threadId: result.id,
+        messageCount: result.messages.length,
+        lastMessage: result.messages[result.messages.length - 1]
+      });
 
       setNewMessage('');
       setAttachments([]); // Clear attachments after sending
       
       await dispatch(processThread(threadId));
+    } catch (error) {
+      console.error('Error sending message:', error);
     } finally {
       setIsProcessing(false);
     }

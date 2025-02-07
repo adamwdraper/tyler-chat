@@ -37,8 +37,44 @@ export const createThread = createAsyncThunk(
 export const addMessage = createAsyncThunk(
   'chat/addMessage',
   async ({ threadId, message }: { threadId: string; message: MessageCreate }) => {
-    const response = await axios.post(`${API_BASE_URL}/threads/${threadId}/messages`, message);
-    return response.data;
+    try {
+      console.log('Sending request to backend:', {
+        url: `${API_BASE_URL}/threads/${threadId}/messages`,
+        messageSize: JSON.stringify(message).length,
+        hasAttachments: message.attachments?.length > 0
+      });
+
+      // Add headers to handle large JSON payloads
+      const response = await axios.post(
+        `${API_BASE_URL}/threads/${threadId}/messages`, 
+        message,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          maxContentLength: Infinity,
+          maxBodyLength: Infinity
+        }
+      );
+
+      console.log('Backend response:', {
+        status: response.status,
+        hasAttachments: response.data?.messages?.[response.data.messages.length - 1]?.attachments?.length > 0
+      });
+
+      return response.data;
+    } catch (error) {
+      console.error('Error sending message to backend:', error);
+      if (axios.isAxiosError(error)) {
+        console.error('Axios error details:', {
+          status: error.response?.status,
+          data: error.response?.data,
+          message: error.message
+        });
+      }
+      throw error;
+    }
   }
 );
 
