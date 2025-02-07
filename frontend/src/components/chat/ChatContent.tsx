@@ -33,6 +33,7 @@ import {
   IconCheck,
   IconMarkdown,
   IconAbc,
+  IconClock,
 } from '@tabler/icons-react';
 import { useSelector } from 'react-redux';
 import { addMessage, processThread, createThread, updateThread, deleteThread } from '@/store/chat/ChatSlice';
@@ -811,8 +812,9 @@ const ChatContent: React.FC = () => {
                           </Box>
                         </Tooltip>
                       )}
-                      {message.metrics.timing?.latency > 0 && (
-                        <Box component="span">
+                      {message.metrics?.timing?.latency > 0 && (
+                        <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          <IconClock size={14} />
                           {(message.metrics.timing.latency / 1000).toFixed(2)}s
                         </Box>
                       )}
