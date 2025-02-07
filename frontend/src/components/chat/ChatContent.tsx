@@ -1251,25 +1251,7 @@ const ChatContent: React.FC = () => {
           </Box>
         )}
         
-        {attachments.length > 0 && (
-          <Box sx={{ mb: 2 }}>
-            <Stack direction="row" spacing={1} flexWrap="wrap" gap={1}>
-              {attachments.map((file, index) => (
-                <Chip
-                  key={index}
-                  label={file.name}
-                  onDelete={() => handleRemoveAttachment(index)}
-                  deleteIcon={<IconX size={14} />}
-                  icon={<IconPaperclip size={14} />}
-                  variant="outlined"
-                  size="small"
-                />
-              ))}
-            </Stack>
-          </Box>
-        )}
-
-        <Stack direction="row" spacing={2} alignItems="flex-end">
+        <Stack direction="row" alignItems="flex-end">
           <input
             type="file"
             ref={fileInputRef}
@@ -1279,68 +1261,91 @@ const ChatContent: React.FC = () => {
           />
           <Box sx={{ 
             flexGrow: 1,
-            border: 1,
-            borderColor: 'divider',
-            borderRadius: 1,
-            bgcolor: 'background.paper',
-            '& .MuiOutlinedInput-notchedOutline': {
-              border: 'none'
-            }
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 1.5,
           }}>
-            <TextField
-              fullWidth
-              multiline
-              maxRows={4}
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder="Type your message..."
-              variant="outlined"
-              size="small"
-              disabled={isProcessing}
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  border: 'none',
-                  borderRadius: '8px 8px 0 0',
-                }
-              }}
-            />
+            {attachments.length > 0 && (
+              <Stack direction="row" spacing={1} flexWrap="wrap" gap={1}>
+                {attachments.map((file, index) => (
+                  <Chip
+                    key={index}
+                    label={file.name}
+                    onDelete={() => handleRemoveAttachment(index)}
+                    deleteIcon={<IconX size={14} />}
+                    icon={<IconPaperclip size={14} />}
+                    variant="outlined"
+                    size="small"
+                  />
+                ))}
+              </Stack>
+            )}
+            
             <Box sx={{ 
-              display: 'flex', 
-              justifyContent: 'space-between', 
-              alignItems: 'center',
-              px: 1,
-              py: 0.5
+              border: 1,
+              borderColor: 'divider',
+              borderRadius: 1,
+              bgcolor: 'background.paper',
+              '& .MuiOutlinedInput-notchedOutline': {
+                border: 'none'
+              }
             }}>
-              <IconButton
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isProcessing}
+              <TextField
+                fullWidth
+                multiline
+                maxRows={4}
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder="Type your message..."
+                variant="outlined"
                 size="small"
+                disabled={isProcessing}
                 sx={{
-                  color: 'text.secondary',
-                  '&:hover': {
-                    color: 'primary.main',
-                  },
-                }}
-              >
-                <IconPaperclip size={20} />
-              </IconButton>
-              <IconButton
-                color="primary"
-                onClick={handleSendMessage}
-                disabled={(!newMessage.trim() && attachments.length === 0) || isProcessing}
-                sx={{
-                  color: 'primary.main',
-                  '&:hover': {
-                    color: 'primary.dark',
-                  },
-                  '&.Mui-disabled': {
-                    color: 'text.disabled',
+                  '& .MuiOutlinedInput-root': {
+                    border: 'none',
+                    borderRadius: '8px 8px 0 0',
+                    padding: '12px',
                   }
                 }}
-              >
-                <IconSend size={18} />
-              </IconButton>
+              />
+              <Box sx={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center',
+                px: 1.5,
+                py: 0.5
+              }}>
+                <IconButton
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isProcessing}
+                  size="small"
+                  sx={{
+                    color: 'text.secondary',
+                    '&:hover': {
+                      color: 'primary.main',
+                    },
+                  }}
+                >
+                  <IconPaperclip size={20} />
+                </IconButton>
+                <IconButton
+                  color="primary"
+                  onClick={handleSendMessage}
+                  disabled={(!newMessage.trim() && attachments.length === 0) || isProcessing}
+                  sx={{
+                    color: 'primary.main',
+                    '&:hover': {
+                      color: 'primary.dark',
+                    },
+                    '&.Mui-disabled': {
+                      color: 'text.disabled',
+                    }
+                  }}
+                >
+                  <IconSend size={18} />
+                </IconButton>
+              </Box>
             </Box>
           </Box>
         </Stack>
