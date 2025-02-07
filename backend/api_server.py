@@ -1,5 +1,6 @@
-from fastapi import FastAPI, HTTPException, Query, Depends, WebSocket, WebSocketDisconnect, BackgroundTasks
+from fastapi import FastAPI, HTTPException, Query, Depends, WebSocket, WebSocketDisconnect, BackgroundTasks, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from typing import List, Optional, Dict, Any, Set, Union, Literal
 from pydantic import BaseModel
 import uvicorn
@@ -9,13 +10,19 @@ from dotenv import load_dotenv
 import weave
 import asyncpg
 import json
+import asyncio
+import base64
+import logging
 from sqlalchemy.orm import selectinload
 from sqlalchemy import select
 
 from tyler.models.thread import Thread
 from tyler.models.message import Message, Attachment
 from tyler.models.agent import Agent
-from tyler.database.thread_store import ThreadStore, ThreadRecord
+from tyler.database.thread_store import ThreadStore
+from tyler.storage import FileStore
+
+logger = logging.getLogger(__name__)
 
 # Load environment variables from .env file
 load_dotenv()
@@ -76,6 +83,9 @@ db_url = f"postgresql+asyncpg://{os.getenv('TYLER_DB_USER')}:{os.getenv('TYLER_D
 # Initialize ThreadStore with PostgreSQL URL
 thread_store = ThreadStore(db_url)
 
+# Initialize file store
+file_store = FileStore()
+
 agent = Agent(
     model_name="gpt-4o",
     purpose="To help with general questions",
@@ -87,8 +97,13 @@ agent = Agent(
 
 @app.on_event("startup")
 async def startup_event():
-    """Initialize the database on startup."""
+    """Initialize the database and file store on startup."""
     await thread_store.initialize()
+    # Verify file store is accessible
+    health = await file_store.check_health()
+    if not health['healthy']:
+        logger.error(f"File store health check failed: {health['errors']}")
+        raise RuntimeError("File store initialization failed")
 
 # Dependency to get thread store
 async def get_thread_store():
@@ -204,10 +219,11 @@ async def delete_thread(
         raise HTTPException(status_code=404, detail="Thread not found")
     return {"status": "success"}
 
-@app.post("/threads/{thread_id}/messages", response_model=Thread)
+@app.post("/threads/{thread_id}/messages")
 async def add_message(
     thread_id: str,
-    message: MessageCreate,
+    message: str = Form(...),
+    files: List[UploadFile] = None,
     thread_store: ThreadStore = Depends(get_thread_store)
 ):
     """Add a message to a thread"""
@@ -215,34 +231,51 @@ async def add_message(
     if not thread:
         raise HTTPException(status_code=404, detail="Thread not found")
     
-    # Convert attachment dicts to Attachment objects if present
-    attachments = None
-    if message.attachments:
-        attachments = [Attachment(**attachment) for attachment in message.attachments]
+    # Parse message data from form
+    message_data = json.loads(message)
     
+    # Process uploaded files if any
+    attachments = []
+    if files:
+        for file in files:
+            content = await file.read()
+            attachment = Attachment(
+                filename=file.filename,
+                content=content,
+                mime_type=file.content_type
+            )
+            attachments.append(attachment)
+    
+    # Create new message
     new_message = Message(
-        role=message.role,
-        content=message.content,
-        name=message.name,
-        tool_call_id=message.tool_call_id,
-        tool_calls=message.tool_calls,
-        attributes=message.attributes or {},
-        source=message.source,
-        attachments=attachments or []
+        role=message_data["role"],
+        content=message_data["content"],
+        name=message_data.get("name"),
+        tool_call_id=message_data.get("tool_call_id"),
+        tool_calls=message_data.get("tool_calls"),
+        attributes=message_data.get("attributes", {}),
+        source=message_data.get("source"),
+        attachments=attachments
     )
     thread.add_message(new_message)
     
+    # Save thread - this will handle storing files
     await thread_store.save(thread)
-    return thread
+    
+    # Convert thread to dict and return as JSON response
+    return JSONResponse(content=thread.to_dict())
 
 @app.websocket("/ws/threads/{thread_id}")
 async def websocket_endpoint(websocket: WebSocket, thread_id: str):
     await manager.connect(websocket, thread_id)
     try:
         while True:
-            # Keep the connection alive
-            await websocket.receive_text()
-    except WebSocketDisconnect:
+            # Keep the connection alive with periodic pings
+            try:
+                await websocket.receive_text()
+            except WebSocketDisconnect:
+                break
+    finally:
         manager.disconnect(websocket, thread_id)
 
 @app.post("/threads/{thread_id}/process", response_model=Thread)

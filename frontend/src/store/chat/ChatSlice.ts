@@ -38,16 +38,42 @@ export const addMessage = createAsyncThunk(
   'chat/addMessage',
   async ({ threadId, message }: { threadId: string; message: MessageCreate }) => {
     try {
+      // Create FormData if there are attachments
+      if (message.attachments?.length) {
+        const formData = new FormData();
+        
+        // Add message data as JSON, excluding attachments
+        const messageData = { ...message };
+        delete messageData.attachments;
+        formData.append('message', JSON.stringify(messageData));
+        
+        // Add each file
+        message.attachments.forEach((attachment) => {
+          formData.append('files', attachment.file);
+        });
+
+        const response = await axios.post(
+          `${API_BASE_URL}/threads/${threadId}/messages`,
+          formData,
+          {
+            headers: {
+              'Content-Type': 'multipart/form-data',
+            },
+            maxContentLength: Infinity,
+            maxBodyLength: Infinity
+          }
+        );
+        return response.data;
+      }
+
+      // No attachments, send regular JSON
       const response = await axios.post(
         `${API_BASE_URL}/threads/${threadId}/messages`, 
-        message,
+        { message: JSON.stringify(message) },
         {
           headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-          },
-          maxContentLength: Infinity,
-          maxBodyLength: Infinity
+            'Content-Type': 'application/x-www-form-urlencoded',
+          }
         }
       );
       return response.data;

@@ -17,6 +17,7 @@ import {
   Fade,
   Tooltip,
   Chip,
+  Modal,
 } from '@mui/material';
 import { 
   IconSend, 
@@ -120,6 +121,11 @@ const ChatContent: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [selectedAttachment, setSelectedAttachment] = useState<{
+    filename: string;
+    processed_content: any;
+    mime_type: string;
+  } | null>(null);
   
   const { threads, currentThread } = useSelector((state: RootState) => state.chat);
   const activeThread = threads.find((t: Thread) => t.id === currentThread);
@@ -198,10 +204,61 @@ const ChatContent: React.FC = () => {
     setContentHeights(newHeights);
   }, [activeThread?.messages]);
 
-  // Handle file selection from button
+  // Add file validation constants
+  const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB to match backend
+  const ALLOWED_MIME_TYPES = new Set([
+    // Documents
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'text/plain',
+    'text/csv',
+    'application/json',
+    // Images
+    'image/jpeg',
+    'image/png',
+    'image/gif',
+    'image/webp',
+    'image/svg+xml',
+    // Archives
+    'application/zip',
+    'application/x-tar',
+    'application/gzip',
+  ]);
+
+  // Add validation helper
+  const validateFile = (file: File): string | null => {
+    if (file.size > MAX_FILE_SIZE) {
+      return `File ${file.name} is too large. Maximum size is ${MAX_FILE_SIZE / 1024 / 1024}MB`;
+    }
+    if (!ALLOWED_MIME_TYPES.has(file.type)) {
+      return `File type ${file.type || 'unknown'} is not supported for ${file.name}`;
+    }
+    return null;
+  };
+
+  // Update file selection handler with validation
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
-    setAttachments(prev => [...prev, ...files]);
+    const validFiles: File[] = [];
+    const errors: string[] = [];
+
+    files.forEach(file => {
+      const error = validateFile(file);
+      if (error) {
+        errors.push(error);
+      } else {
+        validFiles.push(file);
+      }
+    });
+
+    if (errors.length > 0) {
+      // You can replace this with your preferred error notification system
+      console.error('File validation errors:', errors);
+      alert(errors.join('\n'));
+    }
+
+    setAttachments(prev => [...prev, ...validFiles]);
     if (event.target) {
       event.target.value = ''; // Reset input
     }
@@ -226,13 +283,32 @@ const ChatContent: React.FC = () => {
     e.stopPropagation();
   };
 
+  // Update drop handler with validation
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
 
     const files = Array.from(e.dataTransfer.files);
-    setAttachments(prev => [...prev, ...files]);
+    const validFiles: File[] = [];
+    const errors: string[] = [];
+
+    files.forEach(file => {
+      const error = validateFile(file);
+      if (error) {
+        errors.push(error);
+      } else {
+        validFiles.push(file);
+      }
+    });
+
+    if (errors.length > 0) {
+      // You can replace this with your preferred error notification system
+      console.error('File validation errors:', errors);
+      alert(errors.join('\n'));
+    }
+
+    setAttachments(prev => [...prev, ...validFiles]);
   };
 
   // Remove attachment
@@ -255,27 +331,12 @@ const ChatContent: React.FC = () => {
     setIsProcessing(true);
     
     try {
-      // Convert files to base64
-      const fileAttachments = await Promise.all(
-        attachments.map(async (file) => {
-          const base64Content = await new Promise<string>((resolve) => {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-              // Extract only the base64 part after the data URL prefix
-              const base64 = (reader.result as string).split(',')[1];
-              resolve(base64);
-            };
-            reader.readAsDataURL(file);
-          });
-
-          return {
-            filename: file.name,
-            content: base64Content,
-            mime_type: file.type,
-            processed_content: null // Let the backend handle processing
-          };
-        })
-      );
+      // Create message with file attachments
+      const fileAttachments = attachments.map((file) => ({
+        file,
+        filename: file.name,
+        mime_type: file.type
+      }));
 
       console.log('Sending message with attachments:', {
         threadId,
@@ -283,8 +344,7 @@ const ChatContent: React.FC = () => {
         attachmentsCount: fileAttachments.length,
         attachmentDetails: fileAttachments.map(a => ({
           filename: a.filename,
-          mime_type: a.mime_type,
-          contentLength: a.content.length
+          mime_type: a.mime_type
         }))
       });
 
@@ -581,6 +641,20 @@ const ChatContent: React.FC = () => {
     }
   };
 
+  const getImageUrl = (content: any, mimeType?: string): string | null | undefined => {
+    if (!content) return undefined;
+    if (typeof content === 'string') {
+      return content.startsWith('data:') 
+        ? content 
+        : `data:${mimeType || 'image/*'};base64,${content}`;
+    }
+    if (content.content) {
+      return `data:${content.mime_type || mimeType || 'image/*'};base64,${content.content}`;
+    }
+    if (content.url) return content.url;
+    return undefined;
+  };
+
   const renderMessage = (message: Message, index: number, messages: Message[]) => {
     const isAI = message.role === 'assistant';
     const isSystem = message.role === 'system';
@@ -818,21 +892,7 @@ const ChatContent: React.FC = () => {
                   <Box sx={{ mt: 2 }}>
                     <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
                       {message.attachments.map((attachment, index) => {
-                        const getImageUrl = (content: any): string | null => {
-                          if (!content) return null;
-                          if (typeof content === 'string') {
-                            return content.startsWith('data:') 
-                              ? content 
-                              : `data:${attachment.mime_type};base64,${content}`;
-                          }
-                          if (content.content) {
-                            return `data:${content.mime_type || attachment.mime_type};base64,${content.content}`;
-                          }
-                          if (content.url) return content.url;
-                          return null;
-                        };
-
-                        const imageUrl = getImageUrl(attachment.processed_content);
+                        const imageUrl = getImageUrl(attachment.processed_content, attachment.mime_type);
                         
                         if (attachment.mime_type?.startsWith('image/')) {
                           return (
@@ -886,10 +946,15 @@ const ChatContent: React.FC = () => {
                             variant="outlined"
                             size="medium"
                             icon={<IconPaperclip size={16} />}
+                            onClick={() => handleAttachmentClick(attachment)}
                             sx={{
+                              cursor: 'pointer',
                               '& .MuiChip-label': {
                                 overflow: 'hidden',
                                 textOverflow: 'ellipsis'
+                              },
+                              '&:hover': {
+                                bgcolor: 'action.hover'
                               }
                             }}
                           />
@@ -1104,6 +1169,132 @@ const ChatContent: React.FC = () => {
       tools: toolCounts,
       total_calls: totalCalls
     };
+  };
+
+  const handleCloseModal = () => {
+    setSelectedAttachment(null);
+  };
+
+  const handleAttachmentClick = (attachment: any) => {
+    setSelectedAttachment(attachment);
+  };
+
+  const FilePreviewModal: React.FC = () => {
+    if (!selectedAttachment) return null;
+
+    console.log('Selected Attachment:', {
+      filename: selectedAttachment.filename,
+      mimeType: selectedAttachment.mime_type,
+      processedContent: selectedAttachment.processed_content
+    });
+
+    const imageUrl = getImageUrl(selectedAttachment.processed_content, selectedAttachment.mime_type);
+    const pdfUrl = selectedAttachment.mime_type === 'application/pdf' && selectedAttachment.processed_content?.content
+      ? `data:application/pdf;base64,${selectedAttachment.processed_content.content}`
+      : null;
+
+    console.log('PDF URL:', pdfUrl);
+
+    const getPdfUrl = (content: any): string | null => {
+      if (!content) return null;
+      if (typeof content === 'string') {
+        return `data:application/pdf;base64,${content}`;
+      }
+      if (content.content) {
+        return `data:application/pdf;base64,${content.content}`;
+      }
+      return null;
+    };
+
+    const pdfDataUrl = selectedAttachment.mime_type === 'application/pdf' 
+      ? getPdfUrl(selectedAttachment.processed_content)
+      : null;
+
+    console.log('PDF Data URL:', pdfDataUrl);
+
+    return (
+      <Modal
+        open={!!selectedAttachment}
+        onClose={handleCloseModal}
+        aria-labelledby="file-preview-modal"
+      >
+        <Box sx={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          width: '90%',
+          maxWidth: 800,
+          maxHeight: '90vh',
+          bgcolor: 'background.paper',
+          boxShadow: 24,
+          p: 4,
+          borderRadius: 1,
+          overflow: 'auto'
+        }}>
+          <Stack spacing={2}>
+            <Stack direction="row" justifyContent="space-between" alignItems="center">
+              <Typography variant="h6" component="h2">
+                {selectedAttachment.filename}
+              </Typography>
+              <IconButton onClick={handleCloseModal} size="small">
+                <IconX size={20} />
+              </IconButton>
+            </Stack>
+            <Divider />
+            <Box sx={{ 
+              overflow: 'auto',
+              maxHeight: 'calc(90vh - 140px)'  // Account for header and padding
+            }}>
+              {selectedAttachment.mime_type?.startsWith('image/') && imageUrl ? (
+                <img 
+                  src={imageUrl}
+                  alt={selectedAttachment.filename}
+                  style={{ 
+                    maxWidth: '100%',
+                    height: 'auto'
+                  }}
+                />
+              ) : selectedAttachment.mime_type === 'application/pdf' ? (
+                <Box sx={{ 
+                  p: 3,
+                  bgcolor: theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
+                  borderRadius: 1,
+                  fontFamily: 'monospace',
+                  fontSize: '0.875rem',
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                  maxHeight: 'calc(90vh - 200px)',
+                  overflow: 'auto'
+                }}>
+                  {selectedAttachment.processed_content?.text || 
+                   (typeof selectedAttachment.processed_content === 'string' 
+                    ? selectedAttachment.processed_content 
+                    : 'No text content available')}
+                </Box>
+              ) : (
+                <Box sx={{ 
+                  p: 3,
+                  bgcolor: theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
+                  borderRadius: 1,
+                  fontFamily: 'monospace',
+                  fontSize: '0.875rem',
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word'
+                }}>
+                  <Typography variant="body2" color="text.secondary">
+                    Preview not available for this file type ({selectedAttachment.mime_type})
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                    Content structure: {JSON.stringify(selectedAttachment.processed_content, null, 2)}
+                  </Typography>
+                </Box>
+              )}
+            </Box>
+          </Stack>
+        </Box>
+      </Modal>
+    );
   };
 
   return (
@@ -1431,6 +1622,7 @@ const ChatContent: React.FC = () => {
           </Box>
         </Stack>
       </Box>
+      <FilePreviewModal />
     </Box>
   );
 };

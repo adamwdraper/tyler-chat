@@ -55,9 +55,13 @@ export interface Message {
   timestamp: string;
   source?: Record<string, any>;
   attachments: Array<{
+    id: string;
     filename: string;
-    content: string;  // base64 string
-    mime_type?: string;
+    mime_type: string;
+    storage_path: string;
+    storage_backend: string;
+    created_at: string;
+    metadata?: Record<string, any>;
     processed_content?: any;
   }>;
   metrics: MessageMetrics;
@@ -128,8 +132,8 @@ export interface MessageCreate {
   attributes?: Record<string, any>;
   source?: Record<string, any>;
   attachments?: Array<{
+    file: File;
     filename: string;
-    content: string;
-    mime_type?: string;
+    mime_type: string;
   }>;
 } 
