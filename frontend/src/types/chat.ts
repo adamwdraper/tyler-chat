@@ -43,6 +43,30 @@ export interface MessageMetrics {
   weave_call: WeaveCall;
 }
 
+export interface ProcessedContent {
+  type: string;
+  text?: string;
+  overview?: string;
+  content?: string;
+  error?: string;
+  analysis?: {
+    objects?: string[];
+    text_detected?: boolean;
+    dominant_colors?: string[];
+  };
+  parsed_content?: any;
+}
+
+export interface Attachment {
+  filename: string;
+  content?: string;  // base64 string
+  mime_type?: string;
+  processed_content?: ProcessedContent;
+  file_id?: string;
+  storage_path?: string;
+  storage_backend?: string;
+}
+
 export interface Message {
   id: string;
   role: "system" | "user" | "assistant" | "tool";
@@ -54,16 +78,7 @@ export interface Message {
   attributes: Record<string, any>;
   timestamp: string;
   source?: Record<string, any>;
-  attachments: Array<{
-    id: string;
-    filename: string;
-    mime_type: string;
-    storage_path: string;
-    storage_backend: string;
-    created_at: string;
-    metadata?: Record<string, any>;
-    processed_content?: any;
-  }>;
+  attachments: Attachment[];
   metrics: MessageMetrics;
 }
 
