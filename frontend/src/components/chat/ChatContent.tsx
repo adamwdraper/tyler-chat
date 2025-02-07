@@ -31,6 +31,8 @@ import {
   IconPlaystationCircle,
   IconCopy,
   IconCheck,
+  IconMarkdown,
+  IconAbc,
 } from '@tabler/icons-react';
 import { useSelector } from 'react-redux';
 import { addMessage, processThread, createThread, updateThread, deleteThread } from '@/store/chat/ChatSlice';
@@ -106,6 +108,7 @@ const ChatContent: React.FC = () => {
   const maxHeight = 300; // About 15 lines of text
   const wsRef = useRef<WebSocket>();
   const [copiedMessageId, setCopiedMessageId] = React.useState<string | null>(null);
+  const [plainTextMessages, setPlainTextMessages] = React.useState<Set<string>>(new Set());
   
   const { threads, currentThread } = useSelector((state: RootState) => state.chat);
   const activeThread = threads.find((t: Thread) => t.id === currentThread);
@@ -382,12 +385,37 @@ const ChatContent: React.FC = () => {
     );
   };
 
+  const toggleMessageFormat = (messageId: string) => {
+    setPlainTextMessages(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(messageId)) {
+        newSet.delete(messageId);
+      } else {
+        newSet.add(messageId);
+      }
+      return newSet;
+    });
+  };
+
   const renderContent = (content: string | (TextContent | ImageContent)[], role: string, message: Message, messages: Message[]) => {
     if (typeof content === 'string') {
       if (role === 'tool') {
         return renderFormattedCode(content, message.name);
       }
-      return renderMarkdown(content);
+      const isPlainText = plainTextMessages.has(message.id);
+      return isPlainText ? (
+        <Typography 
+          variant="body1" 
+          component="pre" 
+          sx={{ 
+            whiteSpace: 'pre-wrap',
+            fontFamily: 'inherit',
+            m: 0
+          }}
+        >
+          {content}
+        </Typography>
+      ) : renderMarkdown(content);
     }
 
     // Handle array of content
@@ -398,7 +426,21 @@ const ChatContent: React.FC = () => {
             if (role === 'tool') {
               return renderFormattedCode(item.text, message.name);
             }
-            return renderMarkdown(item.text);
+            const isPlainText = plainTextMessages.has(message.id);
+            return isPlainText ? (
+              <Typography 
+                key={index}
+                variant="body1" 
+                component="pre" 
+                sx={{ 
+                  whiteSpace: 'pre-wrap',
+                  fontFamily: 'inherit',
+                  m: 0
+                }}
+              >
+                {item.text}
+              </Typography>
+            ) : renderMarkdown(item.text);
           } else if (item.type === 'image_url') {
             return (
               <Box key={index} sx={{ maxWidth: '100%', overflow: 'hidden' }}>
@@ -454,6 +496,10 @@ const ChatContent: React.FC = () => {
       return null;
     }
     
+    // Add this right before the timestamp and metrics section
+    const isToolRelated = message.role === 'tool' || message.tool_call_id;
+    const isPlainText = plainTextMessages.has(message.id);
+
     return (
       <Box key={message.id}>
         <Box p={3} sx={{ display: 'flex', justifyContent: 'center' }}>
@@ -715,6 +761,23 @@ const ChatContent: React.FC = () => {
                   >
                     {copiedMessageId === message.id ? <IconCheck size={14} /> : <IconCopy size={14} />}
                   </IconButton>
+                  {!isToolRelated && (
+                    <Tooltip title={isPlainText ? "Show as Markdown" : "Show as plain text"}>
+                      <IconButton
+                        onClick={() => toggleMessageFormat(message.id)}
+                        size="small"
+                        sx={{ 
+                          p: 0.5,
+                          color: 'text.secondary',
+                          '&:hover': {
+                            color: 'primary.main',
+                          }
+                        }}
+                      >
+                        {isPlainText ? <IconMarkdown size={14} /> : <IconAbc size={14} />}
+                      </IconButton>
+                    </Tooltip>
+                  )}
                   {message.metrics && (
                     <>
                       {message.metrics.usage?.total_tokens > 0 && (
