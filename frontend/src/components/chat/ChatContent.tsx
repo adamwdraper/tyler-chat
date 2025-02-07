@@ -632,6 +632,7 @@ const ChatContent: React.FC = () => {
                   style={{ 
                     maxWidth: '100%', 
                     height: 'auto',
+                    maxHeight: 300,
                     borderRadius: theme.shape.borderRadius 
                   }} 
                 />
@@ -947,8 +948,8 @@ const ChatContent: React.FC = () => {
                                     alt={attachment.filename}
                                     style={{ 
                                       maxWidth: '100%',
-                                      maxHeight: '100%',
                                       height: 'auto',
+                                      maxHeight: 300,
                                       display: 'block',
                                       margin: '0 auto',
                                       borderRadius: theme.shape.borderRadius
@@ -1262,7 +1263,6 @@ const ChatContent: React.FC = () => {
               alt={selectedAttachment.filename}
               style={{ 
                 maxWidth: '100%',
-                maxHeight: '100%',
                 height: 'auto',
                 display: 'block',
                 margin: '0 auto',
@@ -1455,7 +1455,7 @@ const ChatContent: React.FC = () => {
         sx={{
           position: 'absolute',
           '& .MuiBackdrop-root': {
-            backgroundColor: theme.palette.mode === 'dark' ? 'rgba(0, 0, 0, 0.7)' : 'rgba(255, 255, 255, 0.7)',
+            backgroundColor: theme.palette.mode === 'dark' ? 'rgb(0, 0, 0)' : 'rgb(255, 255, 255)',
             position: 'absolute'
           }
         }}
@@ -1468,7 +1468,7 @@ const ChatContent: React.FC = () => {
             left: 0,
             right: 0,
             bottom: 0,
-            bgcolor: theme.palette.mode === 'dark' ? 'rgba(0, 0, 0, 0.7)' : 'rgba(255, 255, 255, 0.7)',
+            bgcolor: theme.palette.mode === 'dark' ? 'rgb(0, 0, 0)' : 'rgb(255, 255, 255)',
             display: 'flex',
             flexDirection: 'column',
             outline: 'none'
