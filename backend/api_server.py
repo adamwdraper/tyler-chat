@@ -241,9 +241,11 @@ async def add_message(
     thread_id: str,
     message: str = Form(...),
     files: List[UploadFile] = None,
-    thread_store: ThreadStore = Depends(get_thread_store)
+    process: bool = Form(True),  # Add process parameter with default True
+    thread_store: ThreadStore = Depends(get_thread_store),
+    background_tasks: BackgroundTasks = None
 ):
-    """Add a message to a thread"""
+    """Add a message to a thread and optionally process it"""
     thread = await thread_store.get(thread_id)
     if not thread:
         raise HTTPException(status_code=404, detail="Thread not found")
@@ -278,6 +280,17 @@ async def add_message(
     
     # Save thread
     await thread_store.save(thread)
+    
+    # Process thread if requested
+    if process:
+        print(f"\nProcessing thread {thread_id}")
+        thread, new_messages = await agent.go(thread.id)
+        
+        # Check if this is a new chat and we should generate a title
+        if thread.title == "New Chat" and not thread.attributes.get("title_generated"):
+            if any(m.role == "assistant" for m in thread.messages):
+                if background_tasks:
+                    background_tasks.add_task(generate_and_save_title, thread_id, thread_store, manager)
     
     # Convert thread to dict and return as JSON response
     return JSONResponse(content=thread.to_dict())

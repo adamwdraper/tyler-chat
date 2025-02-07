@@ -341,16 +341,6 @@ const ChatContent: React.FC = () => {
         mime_type: file.type
       }));
 
-      console.log('Sending message with attachments:', {
-        threadId,
-        messageContent: newMessage,
-        attachmentsCount: fileAttachments.length,
-        attachmentDetails: fileAttachments.map(a => ({
-          filename: a.filename,
-          mime_type: a.mime_type
-        }))
-      });
-
       // Create message with the new structure
       const messageCreate: MessageCreate = {
         role: 'user',
@@ -359,21 +349,15 @@ const ChatContent: React.FC = () => {
         attachments: fileAttachments
       };
 
-      const result = await dispatch(addMessage({
+      // Add message and process in one call
+      await dispatch(addMessage({
         threadId,
-        message: messageCreate
+        message: messageCreate,
+        process: true
       })).unwrap();
-
-      console.log('Message sent successfully:', {
-        threadId: result.id,
-        messageCount: result.messages.length,
-        lastMessage: result.messages[result.messages.length - 1]
-      });
 
       setNewMessage('');
       setAttachments([]); // Clear attachments after sending
-      
-      await dispatch(processThread(threadId));
     } catch (error) {
       console.error('Error sending message:', error);
     } finally {
@@ -1115,7 +1099,7 @@ const ChatContent: React.FC = () => {
   };
 
   const calculateMetrics = () => {
-    if (!activeThread) return { messages: 0, tools: 0, tokens: 0 };
+    if (!activeThread) return { messages: 0, tools: 0, tokens: 0, totalLatency: 0 };
     
     const messageCount = activeThread.messages.length;
     
@@ -1127,10 +1111,15 @@ const ChatContent: React.FC = () => {
     const totalTokens = activeThread.messages.reduce((total, msg) => 
       total + (msg.metrics?.usage?.total_tokens || 0), 0);
 
+    // Calculate total latency
+    const totalLatency = activeThread.messages.reduce((total, msg) => 
+      total + (msg.metrics?.timing?.latency || 0), 0);
+
     return { 
       messages: messageCount, 
       tools: toolCalls, 
-      tokens: totalTokens 
+      tokens: totalTokens,
+      totalLatency
     };
   };
 
@@ -1684,6 +1673,12 @@ const ChatContent: React.FC = () => {
                   </Typography>
                 </Stack>
               </Tooltip>
+            </Stack>
+            <Stack direction="row" spacing={1} alignItems="center">
+              <IconClock size={20} style={{ color: theme.palette.info.main }} />
+              <Typography variant="body2">
+                {(calculateMetrics().totalLatency / 1000).toFixed(1)}s
+              </Typography>
             </Stack>
           </Stack>
           <IconButton 
