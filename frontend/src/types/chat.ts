@@ -48,6 +48,7 @@ export interface ProcessedContent {
   text?: string;
   overview?: string;
   content?: string;
+  url?: string;
   error?: string;
   analysis?: {
     objects?: string[];

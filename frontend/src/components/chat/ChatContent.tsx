@@ -19,6 +19,8 @@ import {
   Chip,
   Modal,
   Alert,
+  Menu,
+  MenuItem,
 } from '@mui/material';
 import { 
   IconSend, 
@@ -39,6 +41,7 @@ import {
   IconClock,
   IconPaperclip,
   IconX,
+  IconDotsVertical,
 } from '@tabler/icons-react';
 import { useSelector } from 'react-redux';
 import { addMessage, processThread, createThread, updateThread, deleteThread } from '@/store/chat/ChatSlice';
@@ -123,6 +126,8 @@ const ChatContent: React.FC = () => {
   const dropZoneRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [selectedAttachment, setSelectedAttachment] = useState<MessageAttachment | null>(null);
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const open = Boolean(anchorEl);
   
   const { threads, currentThread } = useSelector((state: RootState) => state.chat);
   const activeThread = threads.find((t: Thread) => t.id === currentThread);
@@ -150,6 +155,7 @@ const ChatContent: React.FC = () => {
     const timer = setTimeout(() => {
       setFadeIn(true);
     }, 150);
+    setSelectedAttachment(null); // Close modal when thread changes
     return () => clearTimeout(timer);
   }, [currentThread]);
 
@@ -599,7 +605,27 @@ const ChatContent: React.FC = () => {
             ) : renderMarkdown(item.text);
           } else if (item.type === 'image_url') {
             return (
-              <Box key={index} sx={{ maxWidth: '100%', overflow: 'hidden' }}>
+              <Box 
+                key={index} 
+                sx={{ 
+                  maxWidth: '100%', 
+                  overflow: 'hidden',
+                  cursor: 'pointer'
+                }}
+                onClick={() => {
+                  // Create a MessageAttachment object from the image URL
+                  const attachment: MessageAttachment = {
+                    filename: 'image.png', // Default filename
+                    mime_type: 'image/png',
+                    processed_content: {
+                      type: 'image',
+                      url: item.image_url.url,
+                      content: item.image_url.url
+                    }
+                  };
+                  handleAttachmentClick(attachment);
+                }}
+              >
                 <img 
                   src={item.image_url.url} 
                   alt="Message content" 
@@ -904,27 +930,37 @@ const ChatContent: React.FC = () => {
                                 p: 2,
                                 display: 'flex',
                                 justifyContent: 'center',
-                                alignItems: 'center'
+                                alignItems: 'center',
+                                cursor: 'pointer'
                               }}
+                              onClick={() => handleAttachmentClick(attachment)}
                             >
                               {imageUrl ? (
-                                <img 
-                                  src={imageUrl}
-                                  alt={attachment.filename}
-                                  style={{ 
-                                    maxWidth: '100%',
-                                    maxHeight: '300px',
-                                    height: 'auto',
-                                    display: 'block',
-                                    objectFit: 'contain'
-                                  }}
-                                  onError={(e) => {
-                                    console.error('Image failed to load:', {
-                                      src: imageUrl,
-                                      error: e
-                                    });
-                                  }}
-                                />
+                                <Box sx={{ 
+                                  height: '100%', 
+                                  display: 'flex', 
+                                  alignItems: 'center', 
+                                  justifyContent: 'center'
+                                }}>
+                                  <img 
+                                    src={imageUrl}
+                                    alt={attachment.filename}
+                                    style={{ 
+                                      maxWidth: '100%',
+                                      maxHeight: '100%',
+                                      height: 'auto',
+                                      display: 'block',
+                                      margin: '0 auto',
+                                      borderRadius: theme.shape.borderRadius
+                                    }}
+                                    onError={(e) => {
+                                      console.error('Image failed to load:', {
+                                        src: imageUrl,
+                                        error: e
+                                      });
+                                    }}
+                                  />
+                                </Box>
                               ) : (
                                 <Box sx={{ p: 2, textAlign: 'center' }}>
                                   <Typography variant="body2" color="text.secondary">
@@ -1013,22 +1049,22 @@ const ChatContent: React.FC = () => {
                         <Tooltip
                           title={
                             <Box sx={{ p: 1, fontFamily: 'monospace' }}>
-                              <Box sx={{ color: 'primary.light', mb: 0.5 }}>
-                                {message.metrics.model || 'Unknown Model'}:
-                              </Box>
-                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
-                                <span>Prompt:</span>
-                                <span>{message.metrics.usage.prompt_tokens.toLocaleString()}</span>
-                              </Box>
-                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
-                                <span>Completion:</span>
-                                <span>{message.metrics.usage.completion_tokens.toLocaleString()}</span>
-                              </Box>
-                              <Divider sx={{ my: 0.5 }} />
-                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'primary.light' }}>
-                                <span>Total:</span>
-                                <span>{message.metrics.usage.total_tokens.toLocaleString()}</span>
-                              </Box>
+                                <Box sx={{ color: 'primary.light', mb: 0.5 }}>
+                                  {message.metrics.model || 'Unknown Model'}:
+                                </Box>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100' }}>
+                                  <span>Prompt:</span>
+                                  <span>{message.metrics.usage.prompt_tokens.toLocaleString()}</span>
+                                </Box>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100' }}>
+                                  <span>Completion:</span>
+                                  <span>{message.metrics.usage.completion_tokens.toLocaleString()}</span>
+                                </Box>
+                                <Divider sx={{ my: 0.5, borderColor: 'rgba(255, 255, 255, 0.2)' }} />
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100' }}>
+                                  <span>Total:</span>
+                                  <span>{message.metrics.usage.total_tokens.toLocaleString()}</span>
+                                </Box>
                             </Box>
                           }
                           arrow
@@ -1176,13 +1212,21 @@ const ChatContent: React.FC = () => {
     setSelectedAttachment(attachment);
   };
 
-  const FilePreviewModal: React.FC = () => {
+  const FilePreviewModal = () => {
     if (!selectedAttachment) return null;
 
     const getFileUrl = (attachment: typeof selectedAttachment) => {
       // If we have a storage path, construct the URL to the actual file
       if (attachment.storage_path) {
         return `/files/${attachment.storage_path}`;
+      }
+      // If we have a URL in processed content, use that directly
+      if (attachment.processed_content?.url) {
+        return attachment.processed_content.url;
+      }
+      // If we have content in processed content, use that directly
+      if (attachment.processed_content?.content) {
+        return attachment.processed_content.content;
       }
       // Fallback to base64 content if available
       if (attachment.content) {
@@ -1207,22 +1251,31 @@ const ChatContent: React.FC = () => {
       // Handle images
       if (selectedAttachment.mime_type?.startsWith('image/')) {
         return fileUrl ? (
-          <img 
-            src={fileUrl}
-            alt={selectedAttachment.filename}
-            style={{ 
-              maxWidth: '100%',
-              height: 'auto',
-              display: 'block',
-              margin: '0 auto'
-            }}
-            onError={(e) => {
-              console.error('Image failed to load:', {
-                src: fileUrl,
-                error: e
-              });
-            }}
-          />
+          <Box sx={{ 
+            height: '100%', 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center'
+          }}>
+            <img 
+              src={fileUrl}
+              alt={selectedAttachment.filename}
+              style={{ 
+                maxWidth: '100%',
+                maxHeight: '100%',
+                height: 'auto',
+                display: 'block',
+                margin: '0 auto',
+                borderRadius: theme.shape.borderRadius
+              }}
+              onError={(e) => {
+                console.error('Image failed to load:', {
+                  src: fileUrl,
+                  error: e
+                });
+              }}
+            />
+          </Box>
         ) : (
           <Typography variant="body2" color="text.secondary">
             Unable to load image
@@ -1236,19 +1289,18 @@ const ChatContent: React.FC = () => {
           return (
             <Box sx={{ 
               width: '100%',
-              height: 'calc(90vh - 200px)',
-              minHeight: '500px',
+              height: '100%',
               overflow: 'hidden',
-              borderRadius: 1,
-              border: 1,
-              borderColor: 'divider'
+              bgcolor: 'background.paper',
+              borderRadius: 'inherit'
             }}>
               <object
                 data={fileUrl}
                 type="application/pdf"
                 style={{
                   width: '100%',
-                  height: '100%'
+                  height: '100%',
+                  border: 'none'
                 }}
               >
                 <Box sx={{ p: 2, textAlign: 'center' }}>
@@ -1311,11 +1363,9 @@ const ChatContent: React.FC = () => {
           return (
             <Box sx={{ 
               p: 3,
+              height: '100%',
               bgcolor: theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
-              borderRadius: 1,
-              border: 1,
-              borderColor: 'divider',
-              maxHeight: 'calc(90vh - 200px)',
+              borderRadius: 'inherit',
               overflow: 'auto'
             }}>
               <pre style={{ 
@@ -1401,23 +1451,39 @@ const ChatContent: React.FC = () => {
         open={!!selectedAttachment}
         onClose={handleCloseModal}
         aria-labelledby="file-preview-modal"
-      >
-        <Box sx={{
+        closeAfterTransition
+        sx={{
           position: 'absolute',
-          top: '2%',  // Small margin from top
-          left: '2%',  // Small margin from left
-          right: '2%', // Small margin from right
-          bottom: '2%', // Small margin from bottom
-          bgcolor: 'background.paper',
-          boxShadow: 24,
-          p: 4,
-          borderRadius: 1,
-          overflow: 'hidden', // Changed from 'auto' to 'hidden'
-          display: 'flex',
-          flexDirection: 'column'
-        }}>
-          <Stack spacing={2} sx={{ height: '100%', overflow: 'hidden' }}>
-            <Stack direction="row" justifyContent="space-between" alignItems="center">
+          '& .MuiBackdrop-root': {
+            backgroundColor: theme.palette.mode === 'dark' ? 'rgba(0, 0, 0, 0.7)' : 'rgba(255, 255, 255, 0.7)',
+            position: 'absolute'
+          }
+        }}
+        container={() => document.getElementById('chat-content-container')}
+      >
+        <Fade in={!!selectedAttachment}>
+          <Box sx={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            bgcolor: theme.palette.mode === 'dark' ? 'rgba(0, 0, 0, 0.7)' : 'rgba(255, 255, 255, 0.7)',
+            display: 'flex',
+            flexDirection: 'column',
+            outline: 'none'
+          }}>
+            <Stack 
+              direction="row" 
+              justifyContent="space-between" 
+              alignItems="center"
+              sx={{ 
+                px: 3,
+                py: 3,
+                bgcolor: theme.palette.mode === 'dark' ? 'rgba(0, 0, 0, 0.5)' : 'rgba(255, 255, 255, 0.5)',
+                backdropFilter: 'blur(10px)'
+              }}
+            >
               <Stack direction="row" spacing={1} alignItems="center">
                 <Typography variant="h6" component="h2">
                   {selectedAttachment.filename}
@@ -1426,22 +1492,51 @@ const ChatContent: React.FC = () => {
                   {selectedAttachment.mime_type}
                 </Typography>
               </Stack>
-              <IconButton onClick={handleCloseModal} size="small">
+              <IconButton 
+                onClick={handleCloseModal} 
+                size="small"
+                sx={{
+                  '&:hover': {
+                    bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
+                  }
+                }}
+              >
                 <IconX size={20} />
               </IconButton>
             </Stack>
-            <Divider />
             <Box sx={{ 
               flexGrow: 1,
               overflow: 'auto',
-              minHeight: 0 // Important for proper flex behavior
+              px: 3,
+              pb: 3,
+              pt: 2,
+              height: 'calc(100vh - 88px)'
             }}>
-              {renderContent()}
+              <Box sx={{
+                height: '100%',
+                borderRadius: 1,
+                overflow: 'hidden'
+              }}>
+                {renderContent()}
+              </Box>
             </Box>
-          </Stack>
-        </Box>
+          </Box>
+        </Fade>
       </Modal>
     );
+  };
+
+  const handleMenuClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    setAnchorEl(event.currentTarget);
+  };
+
+  const handleMenuClose = () => {
+    setAnchorEl(null);
+  };
+
+  const handleDeleteClick = () => {
+    handleDeleteThread();
+    handleMenuClose();
   };
 
   return (
@@ -1451,12 +1546,14 @@ const ChatContent: React.FC = () => {
         display: 'flex',
         flexDirection: 'column',
         bgcolor: 'background.paper',
+        position: 'relative'
       }}
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
       ref={dropZoneRef}
+      id="chat-content-container"
     >
       {activeThread && (
         <Box sx={{ 
@@ -1485,22 +1582,22 @@ const ChatContent: React.FC = () => {
                         <>
                           <Box sx={{ color: 'primary.light', mb: 0.5 }}>Tool Usage:</Box>
                           {toolNames.map((toolName) => (
-                            <Box key={toolName} sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+                            <Box key={toolName} sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100' }}>
                               <span>{toolName}:</span>
                               <span>{tools[toolName]}</span>
                             </Box>
                           ))}
                           {toolNames.length > 1 && (
                             <>
-                              <Divider sx={{ my: 0.5 }} />
-                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'primary.light' }}>
+                              <Divider sx={{ my: 0.5, borderColor: 'rgba(255, 255, 255, 0.2)' }} />
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100' }}>
                                 <span>Total:</span>
                                 <span>{total_calls}</span>
                               </Box>
                             </>
                           )}
                           {toolNames.length === 0 && (
-                            <Box sx={{ color: 'text.secondary' }}>No tools used</Box>
+                            <Box sx={{ color: 'grey.100' }}>No tools used</Box>
                           )}
                         </>
                       );
@@ -1534,20 +1631,20 @@ const ChatContent: React.FC = () => {
                               <Box sx={{ color: 'primary.light', mt: 1, mb: 0.5 }}>
                                 {model}:
                               </Box>
-                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100' }}>
                                 <span>Prompt:</span>
                                 <span>{usage.prompt_tokens.toLocaleString()}</span>
                               </Box>
-                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100' }}>
                                 <span>Completion:</span>
                                 <span>{usage.completion_tokens.toLocaleString()}</span>
                               </Box>
-                              <Divider sx={{ my: 0.5 }} />
-                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+                              <Divider sx={{ my: 0.5, borderColor: 'rgba(255, 255, 255, 0.2)' }} />
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100' }}>
                                 <span>Total:</span>
                                 <span>{usage.total_tokens.toLocaleString()}</span>
                               </Box>
-                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'text.secondary', fontSize: '0.85em' }}>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100', fontSize: '0.85em' }}>
                                 <span>Calls:</span>
                                 <span>{usage.calls}</span>
                               </Box>
@@ -1557,16 +1654,16 @@ const ChatContent: React.FC = () => {
                           {modelCount > 1 && (
                             <Box sx={{ mt: 1 }}>
                               <Box sx={{ color: 'primary.light', mb: 0.5 }}>Overall Usage:</Box>
-                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100' }}>
                                 <span>Prompt:</span>
                                 <span>{overall.prompt_tokens.toLocaleString()}</span>
                               </Box>
-                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100' }}>
                                 <span>Completion:</span>
                                 <span>{overall.completion_tokens.toLocaleString()}</span>
                               </Box>
-                              <Divider sx={{ my: 0.5 }} />
-                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'primary.light' }}>
+                              <Divider sx={{ my: 0.5, borderColor: 'rgba(255, 255, 255, 0.2)' }} />
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100' }}>
                                 <span>Total:</span>
                                 <span>{overall.total_tokens.toLocaleString()}</span>
                               </Box>
@@ -1589,21 +1686,41 @@ const ChatContent: React.FC = () => {
               </Tooltip>
             </Stack>
           </Stack>
-          <Tooltip title="Delete thread">
-            <IconButton 
-              onClick={handleDeleteThread}
-              size="small"
-              color="error"
-              sx={{
-                '&:hover': {
-                  bgcolor: 'error.light',
-                  color: 'white',
-                },
+          <IconButton 
+            onClick={handleMenuClick}
+            size="small"
+            sx={{
+              color: 'text.secondary',
+              '&:hover': {
+                color: 'text.primary',
+              },
+            }}
+          >
+            <IconDotsVertical size={20} />
+          </IconButton>
+          <Menu
+            anchorEl={anchorEl}
+            open={open}
+            onClose={handleMenuClose}
+            anchorOrigin={{
+              vertical: 'bottom',
+              horizontal: 'right',
+            }}
+            transformOrigin={{
+              vertical: 'top',
+              horizontal: 'right',
+            }}
+          >
+            <MenuItem 
+              onClick={handleDeleteClick}
+              sx={{ 
+                gap: 1
               }}
             >
-              <IconTrash size={20} />
-            </IconButton>
-          </Tooltip>
+              <IconTrash size={18} style={{ color: theme.palette.error.main }} />
+              Delete
+            </MenuItem>
+          </Menu>
         </Box>
       )}
       <Box sx={{ flexGrow: 1, position: 'relative', overflow: 'hidden' }}>

@@ -75,6 +75,36 @@ const theme = createTheme({
         },
       },
     },
+    MuiPopover: {
+      styleOverrides: {
+        paper: {
+          boxShadow: '0px 0px 15px rgba(0,0,0,0.1)',
+          borderRadius: '7px',
+        }
+      }
+    },
+    MuiMenu: {
+      styleOverrides: {
+        paper: {
+          boxShadow: '0px 0px 15px rgba(0,0,0,0.1)',
+          borderRadius: '7px',
+        },
+        list: {
+          padding: '8px',
+        }
+      }
+    },
+    MuiMenuItem: {
+      styleOverrides: {
+        root: {
+          borderRadius: '7px',
+          padding: '10px 12px',
+          '&:hover': {
+            backgroundColor: 'rgba(93, 135, 255, 0.05)'
+          }
+        }
+      }
+    }
   },
 });
 
