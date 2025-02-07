@@ -968,14 +968,14 @@ const ChatContent: React.FC = () => {
         bgcolor: 'background.paper',
       }}
     >
-      <Box sx={{ 
-        p: 3, 
-        borderBottom: `1px solid ${theme.palette.divider}`,
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center'
-      }}>
-        {activeThread && (
+      {activeThread && (
+        <Box sx={{ 
+          p: 3, 
+          borderBottom: `1px solid ${theme.palette.divider}`,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
+        }}>
           <Stack direction="row" spacing={3} alignItems="center">
             <Stack direction="row" spacing={1} alignItems="center">
               <IconMessage size={20} style={{ color: theme.palette.primary.main }} />
@@ -1099,8 +1099,6 @@ const ChatContent: React.FC = () => {
               </Tooltip>
             </Stack>
           </Stack>
-        )}
-        {activeThread && (
           <Tooltip title="Delete thread">
             <IconButton 
               onClick={handleDeleteThread}
@@ -1116,8 +1114,8 @@ const ChatContent: React.FC = () => {
               <IconTrash size={20} />
             </IconButton>
           </Tooltip>
-        )}
-      </Box>
+        </Box>
+      )}
       <Box sx={{ flexGrow: 1, position: 'relative', overflow: 'hidden' }}>
         <Fade in={fadeIn} timeout={300}>
           <Box sx={{ height: '100%' }}>
