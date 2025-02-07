@@ -107,6 +107,7 @@ const ChatContent: React.FC = () => {
   const [isNewTitle, setIsNewTitle] = React.useState(false);
   const [fadeIn, setFadeIn] = React.useState(true);
   const contentRefs = React.useRef<Map<string, HTMLDivElement>>(new Map());
+  const [hoveredMessageId, setHoveredMessageId] = React.useState<string | null>(null);
   const maxHeight = 300; // About 15 lines of text
   const wsRef = useRef<WebSocket>();
   const [copiedMessageId, setCopiedMessageId] = React.useState<string | null>(null);
@@ -500,6 +501,7 @@ const ChatContent: React.FC = () => {
     const contentHeight = contentHeights.get(message.id) || 0;
     const shouldShowExpand = contentHeight > maxHeight;
     const isLastMessage = index === messages.length - 1;
+    const isHovered = hoveredMessageId === message.id;
 
     // Skip tool responses as they'll be rendered with their calls
     if (isTool && !message.tool_call_id) {
@@ -511,7 +513,11 @@ const ChatContent: React.FC = () => {
     const isPlainText = plainTextMessages.has(message.id);
 
     return (
-      <Box key={message.id}>
+      <Box 
+        key={message.id}
+        onMouseEnter={() => setHoveredMessageId(message.id)}
+        onMouseLeave={() => setHoveredMessageId(null)}
+      >
         <Box p={3} sx={{ display: 'flex', justifyContent: 'center' }}>
           <Box sx={{ width: '100%', maxWidth: 900 }}>
             <Stack direction="row" gap="16px" mb={2}>
@@ -758,23 +764,10 @@ const ChatContent: React.FC = () => {
                     typography: 'caption',
                   }}
                 >
-                  <IconButton
-                    onClick={() => handleCopyMessage(message)}
-                    size="small"
-                    sx={{ 
-                      p: 0.5,
-                      color: 'text.secondary',
-                      '&:hover': {
-                        color: 'primary.main',
-                      }
-                    }}
-                  >
-                    {copiedMessageId === message.id ? <IconCheck size={14} /> : <IconCopy size={14} />}
-                  </IconButton>
-                  {!isToolRelated && (
-                    <Tooltip title={isPlainText ? "Show as Markdown" : "Show as plain text"}>
+                  <Fade in={isHovered}>
+                    <Box sx={{ display: 'flex', gap: 2 }}>
                       <IconButton
-                        onClick={() => toggleMessageFormat(message.id)}
+                        onClick={() => handleCopyMessage(message)}
                         size="small"
                         sx={{ 
                           p: 0.5,
@@ -784,10 +777,27 @@ const ChatContent: React.FC = () => {
                           }
                         }}
                       >
-                        {isPlainText ? <IconMarkdown size={14} /> : <IconAbc size={14} />}
+                        {copiedMessageId === message.id ? <IconCheck size={14} /> : <IconCopy size={14} />}
                       </IconButton>
-                    </Tooltip>
-                  )}
+                      {!isToolRelated && (
+                        <Tooltip title={isPlainText ? "Show as Markdown" : "Show as plain text"}>
+                          <IconButton
+                            onClick={() => toggleMessageFormat(message.id)}
+                            size="small"
+                            sx={{ 
+                              p: 0.5,
+                              color: 'text.secondary',
+                              '&:hover': {
+                                color: 'primary.main',
+                              }
+                            }}
+                          >
+                            {isPlainText ? <IconMarkdown size={14} /> : <IconAbc size={14} />}
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                    </Box>
+                  </Fade>
                   {message.metrics && (
                     <>
                       {message.metrics.usage?.total_tokens > 0 && (
