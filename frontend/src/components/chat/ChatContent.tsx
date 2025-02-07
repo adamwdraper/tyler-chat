@@ -1265,22 +1265,6 @@ const ChatContent: React.FC = () => {
             flexDirection: 'column',
             gap: 1.5,
           }}>
-            {attachments.length > 0 && (
-              <Stack direction="row" spacing={1} flexWrap="wrap" gap={1}>
-                {attachments.map((file, index) => (
-                  <Chip
-                    key={index}
-                    label={file.name}
-                    onDelete={() => handleRemoveAttachment(index)}
-                    deleteIcon={<IconX size={14} />}
-                    icon={<IconPaperclip size={14} />}
-                    variant="outlined"
-                    size="small"
-                  />
-                ))}
-              </Stack>
-            )}
-            
             <Box sx={{ 
               border: 1,
               borderColor: 'divider',
@@ -1316,19 +1300,35 @@ const ChatContent: React.FC = () => {
                 px: 1.5,
                 py: 0.5
               }}>
-                <IconButton
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isProcessing}
-                  size="small"
-                  sx={{
-                    color: 'text.secondary',
-                    '&:hover': {
-                      color: 'primary.main',
-                    },
-                  }}
-                >
-                  <IconPaperclip size={20} />
-                </IconButton>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <IconButton
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isProcessing}
+                    size="small"
+                    sx={{
+                      color: 'text.secondary',
+                      '&:hover': {
+                        color: 'primary.main',
+                      },
+                    }}
+                  >
+                    <IconPaperclip size={20} />
+                  </IconButton>
+                  {attachments.length > 0 && (
+                    <Stack direction="row" spacing={1} flexWrap="wrap" gap={1}>
+                      {attachments.map((file, index) => (
+                        <Chip
+                          key={index}
+                          label={file.name}
+                          onDelete={() => handleRemoveAttachment(index)}
+                          deleteIcon={<IconX size={14} />}
+                          variant="outlined"
+                          size="small"
+                        />
+                      ))}
+                    </Stack>
+                  )}
+                </Stack>
                 <IconButton
                   color="primary"
                   onClick={handleSendMessage}
