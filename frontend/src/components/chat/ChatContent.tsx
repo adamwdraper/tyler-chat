@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
@@ -31,6 +31,9 @@ import {
   IconPlaystationCircle,
   IconCopy,
   IconCheck,
+  IconMarkdown,
+  IconAbc,
+  IconClock,
 } from '@tabler/icons-react';
 import { useSelector } from 'react-redux';
 import { addMessage, processThread, createThread, updateThread, deleteThread } from '@/store/chat/ChatSlice';
@@ -39,6 +42,7 @@ import { Message, Thread, ToolCall, TextContent, ImageContent, MessageCreate } f
 import Scrollbar from '@/components/custom-scroll/Scrollbar';
 import { useAppDispatch } from '@/hooks/useAppDispatch';
 import { formatTimeAgo } from '@/utils/dateUtils';
+import { useTimeAgoUpdater } from '@/hooks/useTimeAgoUpdater';
 
 const dotAnimation = keyframes`
   0%, 20% {
@@ -103,12 +107,22 @@ const ChatContent: React.FC = () => {
   const [isNewTitle, setIsNewTitle] = React.useState(false);
   const [fadeIn, setFadeIn] = React.useState(true);
   const contentRefs = React.useRef<Map<string, HTMLDivElement>>(new Map());
+  const [hoveredMessageId, setHoveredMessageId] = React.useState<string | null>(null);
   const maxHeight = 300; // About 15 lines of text
   const wsRef = useRef<WebSocket>();
   const [copiedMessageId, setCopiedMessageId] = React.useState<string | null>(null);
+  const [plainTextMessages, setPlainTextMessages] = React.useState<Set<string>>(new Set());
+  const [forceUpdate, setForceUpdate] = React.useState(0);
   
   const { threads, currentThread } = useSelector((state: RootState) => state.chat);
   const activeThread = threads.find((t: Thread) => t.id === currentThread);
+
+  // Use the custom hook for periodic updates
+  const updateTimestamps = useCallback(() => {
+    setForceUpdate(prev => prev + 1);
+  }, []);
+
+  useTimeAgoUpdater(updateTimestamps);
 
   // Sort messages by sequence
   const sortedMessages = React.useMemo(() => {
@@ -382,12 +396,37 @@ const ChatContent: React.FC = () => {
     );
   };
 
+  const toggleMessageFormat = (messageId: string) => {
+    setPlainTextMessages(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(messageId)) {
+        newSet.delete(messageId);
+      } else {
+        newSet.add(messageId);
+      }
+      return newSet;
+    });
+  };
+
   const renderContent = (content: string | (TextContent | ImageContent)[], role: string, message: Message, messages: Message[]) => {
     if (typeof content === 'string') {
       if (role === 'tool') {
         return renderFormattedCode(content, message.name);
       }
-      return renderMarkdown(content);
+      const isPlainText = plainTextMessages.has(message.id);
+      return isPlainText ? (
+        <Typography 
+          variant="body1" 
+          component="pre" 
+          sx={{ 
+            whiteSpace: 'pre-wrap',
+            fontFamily: 'inherit',
+            m: 0
+          }}
+        >
+          {content}
+        </Typography>
+      ) : renderMarkdown(content);
     }
 
     // Handle array of content
@@ -398,7 +437,21 @@ const ChatContent: React.FC = () => {
             if (role === 'tool') {
               return renderFormattedCode(item.text, message.name);
             }
-            return renderMarkdown(item.text);
+            const isPlainText = plainTextMessages.has(message.id);
+            return isPlainText ? (
+              <Typography 
+                key={index}
+                variant="body1" 
+                component="pre" 
+                sx={{ 
+                  whiteSpace: 'pre-wrap',
+                  fontFamily: 'inherit',
+                  m: 0
+                }}
+              >
+                {item.text}
+              </Typography>
+            ) : renderMarkdown(item.text);
           } else if (item.type === 'image_url') {
             return (
               <Box key={index} sx={{ maxWidth: '100%', overflow: 'hidden' }}>
@@ -448,14 +501,23 @@ const ChatContent: React.FC = () => {
     const contentHeight = contentHeights.get(message.id) || 0;
     const shouldShowExpand = contentHeight > maxHeight;
     const isLastMessage = index === messages.length - 1;
+    const isHovered = hoveredMessageId === message.id;
 
     // Skip tool responses as they'll be rendered with their calls
     if (isTool && !message.tool_call_id) {
       return null;
     }
     
+    // Add this right before the timestamp and metrics section
+    const isToolRelated = message.role === 'tool' || message.tool_call_id;
+    const isPlainText = plainTextMessages.has(message.id);
+
     return (
-      <Box key={message.id}>
+      <Box 
+        key={message.id}
+        onMouseEnter={() => setHoveredMessageId(message.id)}
+        onMouseLeave={() => setHoveredMessageId(null)}
+      >
         <Box p={3} sx={{ display: 'flex', justifyContent: 'center' }}>
           <Box sx={{ width: '100%', maxWidth: 900 }}>
             <Stack direction="row" gap="16px" mb={2}>
@@ -702,19 +764,40 @@ const ChatContent: React.FC = () => {
                     typography: 'caption',
                   }}
                 >
-                  <IconButton
-                    onClick={() => handleCopyMessage(message)}
-                    size="small"
-                    sx={{ 
-                      p: 0.5,
-                      color: 'text.secondary',
-                      '&:hover': {
-                        color: 'primary.main',
-                      }
-                    }}
-                  >
-                    {copiedMessageId === message.id ? <IconCheck size={14} /> : <IconCopy size={14} />}
-                  </IconButton>
+                  <Fade in={isHovered}>
+                    <Box sx={{ display: 'flex', gap: 2 }}>
+                      <IconButton
+                        onClick={() => handleCopyMessage(message)}
+                        size="small"
+                        sx={{ 
+                          p: 0.5,
+                          color: 'text.secondary',
+                          '&:hover': {
+                            color: 'primary.main',
+                          }
+                        }}
+                      >
+                        {copiedMessageId === message.id ? <IconCheck size={14} /> : <IconCopy size={14} />}
+                      </IconButton>
+                      {!isToolRelated && (
+                        <Tooltip title={isPlainText ? "Show as Markdown" : "Show as plain text"}>
+                          <IconButton
+                            onClick={() => toggleMessageFormat(message.id)}
+                            size="small"
+                            sx={{ 
+                              p: 0.5,
+                              color: 'text.secondary',
+                              '&:hover': {
+                                color: 'primary.main',
+                              }
+                            }}
+                          >
+                            {isPlainText ? <IconMarkdown size={14} /> : <IconAbc size={14} />}
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                    </Box>
+                  </Fade>
                   {message.metrics && (
                     <>
                       {message.metrics.usage?.total_tokens > 0 && (
@@ -748,8 +831,9 @@ const ChatContent: React.FC = () => {
                           </Box>
                         </Tooltip>
                       )}
-                      {message.metrics.timing?.latency > 0 && (
-                        <Box component="span">
+                      {message.metrics?.timing?.latency > 0 && (
+                        <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          <IconClock size={14} />
                           {(message.metrics.timing.latency / 1000).toFixed(2)}s
                         </Box>
                       )}
@@ -884,14 +968,14 @@ const ChatContent: React.FC = () => {
         bgcolor: 'background.paper',
       }}
     >
-      <Box sx={{ 
-        p: 3, 
-        borderBottom: `1px solid ${theme.palette.divider}`,
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center'
-      }}>
-        {activeThread && (
+      {activeThread && (
+        <Box sx={{ 
+          p: 3, 
+          borderBottom: `1px solid ${theme.palette.divider}`,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
+        }}>
           <Stack direction="row" spacing={3} alignItems="center">
             <Stack direction="row" spacing={1} alignItems="center">
               <IconMessage size={20} style={{ color: theme.palette.primary.main }} />
@@ -1015,8 +1099,6 @@ const ChatContent: React.FC = () => {
               </Tooltip>
             </Stack>
           </Stack>
-        )}
-        {activeThread && (
           <Tooltip title="Delete thread">
             <IconButton 
               onClick={handleDeleteThread}
@@ -1032,8 +1114,8 @@ const ChatContent: React.FC = () => {
               <IconTrash size={20} />
             </IconButton>
           </Tooltip>
-        )}
-      </Box>
+        </Box>
+      )}
       <Box sx={{ flexGrow: 1, position: 'relative', overflow: 'hidden' }}>
         <Fade in={fadeIn} timeout={300}>
           <Box sx={{ height: '100%' }}>
@@ -1075,7 +1157,7 @@ const ChatContent: React.FC = () => {
       </Box>
 
       <Box sx={{ p: 3, borderTop: `1px solid ${theme.palette.divider}`, bgcolor: 'background.default' }}>
-        <Stack direction="row" spacing={2}>
+        <Stack direction="row" spacing={2} alignItems="flex-end">
           <TextField
             fullWidth
             multiline
@@ -1094,6 +1176,9 @@ const ChatContent: React.FC = () => {
             disabled={!newMessage.trim() || isProcessing}
             sx={{
               bgcolor: 'primary.light',
+              width: 40,
+              height: 40,
+              flexShrink: 0,
               '&:hover': {
                 bgcolor: 'primary.main',
                 color: 'white',
