@@ -816,26 +816,85 @@ const ChatContent: React.FC = () => {
                 {/* Attachments */}
                 {message.attachments && message.attachments.length > 0 && (
                   <Box sx={{ mt: 2 }}>
-                    <Typography variant="subtitle2" gutterBottom>
-                      Attachments ({message.attachments.length})
-                    </Typography>
-                    <Stack direction="row" spacing={2}>
-                      {message.attachments.map((attachment, index) => (
-                        <Paper
-                          key={index}
-                          variant="outlined"
-                          sx={{
-                            p: 2,
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 1
-                          }}
-                        >
-                          <Typography variant="body2">
-                            {attachment.filename}
-                          </Typography>
-                        </Paper>
-                      ))}
+                    <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
+                      {message.attachments.map((attachment, index) => {
+                        const getImageUrl = (content: any): string | null => {
+                          if (!content) return null;
+                          if (typeof content === 'string') {
+                            return content.startsWith('data:') 
+                              ? content 
+                              : `data:${attachment.mime_type};base64,${content}`;
+                          }
+                          if (content.content) {
+                            return `data:${content.mime_type || attachment.mime_type};base64,${content.content}`;
+                          }
+                          if (content.url) return content.url;
+                          return null;
+                        };
+
+                        const imageUrl = getImageUrl(attachment.processed_content);
+                        
+                        if (attachment.mime_type?.startsWith('image/')) {
+                          return (
+                            <Box 
+                              key={index}
+                              sx={{ 
+                                width: '100%',
+                                overflow: 'hidden',
+                                borderRadius: 1,
+                                border: 1,
+                                borderColor: 'divider',
+                                p: 2,
+                                display: 'flex',
+                                justifyContent: 'center',
+                                alignItems: 'center'
+                              }}
+                            >
+                              {imageUrl ? (
+                                <img 
+                                  src={imageUrl}
+                                  alt={attachment.filename}
+                                  style={{ 
+                                    maxWidth: '100%',
+                                    maxHeight: '300px',
+                                    height: 'auto',
+                                    display: 'block',
+                                    objectFit: 'contain'
+                                  }}
+                                  onError={(e) => {
+                                    console.error('Image failed to load:', {
+                                      src: imageUrl,
+                                      error: e
+                                    });
+                                  }}
+                                />
+                              ) : (
+                                <Box sx={{ p: 2, textAlign: 'center' }}>
+                                  <Typography variant="body2" color="text.secondary">
+                                    Processing image...
+                                  </Typography>
+                                </Box>
+                              )}
+                            </Box>
+                          );
+                        }
+                        
+                        return (
+                          <Chip
+                            key={index}
+                            label={attachment.filename}
+                            variant="outlined"
+                            size="medium"
+                            icon={<IconPaperclip size={16} />}
+                            sx={{
+                              '& .MuiChip-label': {
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis'
+                              }
+                            }}
+                          />
+                        );
+                      })}
                     </Stack>
                   </Box>
                 )}
