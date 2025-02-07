@@ -18,6 +18,7 @@ import {
   Tooltip,
   Chip,
   Modal,
+  Alert,
 } from '@mui/material';
 import { 
   IconSend, 
@@ -42,7 +43,7 @@ import {
 import { useSelector } from 'react-redux';
 import { addMessage, processThread, createThread, updateThread, deleteThread } from '@/store/chat/ChatSlice';
 import { RootState } from '@/store/Store';
-import { Message, Thread, ToolCall, TextContent, ImageContent, MessageCreate } from '@/types/chat';
+import { Message, Thread, ToolCall, TextContent, ImageContent, MessageCreate, MessageAttachment } from '@/types/chat';
 import Scrollbar from '@/components/custom-scroll/Scrollbar';
 import { useAppDispatch } from '@/hooks/useAppDispatch';
 import { formatTimeAgo } from '@/utils/dateUtils';
@@ -121,11 +122,7 @@ const ChatContent: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [selectedAttachment, setSelectedAttachment] = useState<{
-    filename: string;
-    processed_content: any;
-    mime_type: string;
-  } | null>(null);
+  const [selectedAttachment, setSelectedAttachment] = useState<MessageAttachment | null>(null);
   
   const { threads, currentThread } = useSelector((state: RootState) => state.chat);
   const activeThread = threads.find((t: Thread) => t.id === currentThread);
@@ -1175,42 +1172,178 @@ const ChatContent: React.FC = () => {
     setSelectedAttachment(null);
   };
 
-  const handleAttachmentClick = (attachment: any) => {
+  const handleAttachmentClick = (attachment: MessageAttachment) => {
     setSelectedAttachment(attachment);
   };
 
   const FilePreviewModal: React.FC = () => {
     if (!selectedAttachment) return null;
 
-    console.log('Selected Attachment:', {
-      filename: selectedAttachment.filename,
-      mimeType: selectedAttachment.mime_type,
-      processedContent: selectedAttachment.processed_content
-    });
-
-    const imageUrl = getImageUrl(selectedAttachment.processed_content, selectedAttachment.mime_type);
-    const pdfUrl = selectedAttachment.mime_type === 'application/pdf' && selectedAttachment.processed_content?.content
-      ? `data:application/pdf;base64,${selectedAttachment.processed_content.content}`
-      : null;
-
-    console.log('PDF URL:', pdfUrl);
-
-    const getPdfUrl = (content: any): string | null => {
-      if (!content) return null;
-      if (typeof content === 'string') {
-        return `data:application/pdf;base64,${content}`;
-      }
-      if (content.content) {
-        return `data:application/pdf;base64,${content.content}`;
+    const getFileUrl = (attachment: typeof selectedAttachment) => {
+      // If we have a storage path, construct the URL to the actual file
+      if (attachment.storage_path) {
+        // Use relative URL to access files from project root
+        return `/files/${attachment.storage_path}`;
       }
       return null;
     };
 
-    const pdfDataUrl = selectedAttachment.mime_type === 'application/pdf' 
-      ? getPdfUrl(selectedAttachment.processed_content)
-      : null;
+    const renderContent = () => {
+      if (!selectedAttachment.processed_content) {
+        return (
+          <Box sx={{ p: 2, textAlign: 'center' }}>
+            <Typography variant="body2" color="text.secondary">
+              Processing file...
+            </Typography>
+          </Box>
+        );
+      }
 
-    console.log('PDF Data URL:', pdfDataUrl);
+      const fileUrl = getFileUrl(selectedAttachment);
+
+      // Handle images
+      if (selectedAttachment.mime_type?.startsWith('image/')) {
+        const imageUrl = fileUrl || getImageUrl(selectedAttachment.processed_content, selectedAttachment.mime_type);
+        return imageUrl ? (
+          <img 
+            src={imageUrl}
+            alt={selectedAttachment.filename}
+            style={{ 
+              maxWidth: '100%',
+              height: 'auto',
+              display: 'block',
+              margin: '0 auto'
+            }}
+          />
+        ) : (
+          <Typography variant="body2" color="text.secondary">
+            Unable to load image
+          </Typography>
+        );
+      }
+
+      // Handle PDFs
+      if (selectedAttachment.mime_type === 'application/pdf') {
+        if (fileUrl) {
+          return (
+            <Box sx={{ 
+              width: '100%',
+              height: 'calc(90vh - 200px)',
+              minHeight: '500px',
+              '& iframe': {
+                border: 'none',
+                width: '100%',
+                height: '100%'
+              }
+            }}>
+              <iframe 
+                src={fileUrl} 
+                title={selectedAttachment.filename}
+              />
+            </Box>
+          );
+        }
+        
+        // Fallback to text content if file URL not available
+        const pdfContent = selectedAttachment.processed_content?.text || 
+                          selectedAttachment.processed_content?.overview;
+        return (
+          <Box sx={{ 
+            p: 3,
+            bgcolor: theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
+            borderRadius: 1,
+            fontFamily: 'monospace',
+            fontSize: '0.875rem',
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word'
+          }}>
+            {pdfContent || 'No text content available'}
+          </Box>
+        );
+      }
+
+      // Handle text files
+      if (selectedAttachment.mime_type?.startsWith('text/')) {
+        if (fileUrl) {
+          return (
+            <Box 
+              component="iframe"
+              src={fileUrl}
+              title={selectedAttachment.filename}
+              sx={{ 
+                width: '100%',
+                height: 'calc(90vh - 200px)',
+                border: 'none',
+                borderRadius: 1,
+                bgcolor: theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50'
+              }}
+            />
+          );
+        }
+        
+        return (
+          <Box sx={{ 
+            p: 3,
+            bgcolor: theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
+            borderRadius: 1,
+            fontFamily: 'monospace',
+            fontSize: '0.875rem',
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word'
+          }}>
+            {selectedAttachment.processed_content.text || 'No text content available'}
+          </Box>
+        );
+      }
+
+      // For other file types, show download button and processed content
+      return (
+        <Stack spacing={2}>
+          {fileUrl && (
+            <Box sx={{ textAlign: 'center' }}>
+              <Button
+                variant="contained"
+                color="primary"
+                href={fileUrl}
+                download={selectedAttachment.filename}
+                startIcon={<IconPaperclip size={20} />}
+              >
+                Download {selectedAttachment.filename}
+              </Button>
+            </Box>
+          )}
+          
+          {selectedAttachment.processed_content.overview && (
+            <Box>
+              <Typography variant="subtitle2" color="text.secondary">Overview</Typography>
+              <Typography variant="body2">{selectedAttachment.processed_content.overview}</Typography>
+            </Box>
+          )}
+          
+          {selectedAttachment.processed_content.analysis && (
+            <Box>
+              <Typography variant="subtitle2" color="text.secondary">Analysis</Typography>
+              <Stack spacing={1}>
+                {selectedAttachment.processed_content.analysis.objects && (
+                  <Typography variant="body2">
+                    Objects detected: {selectedAttachment.processed_content.analysis.objects.join(', ')}
+                  </Typography>
+                )}
+                {selectedAttachment.processed_content.analysis.text_detected && (
+                  <Typography variant="body2">Text detected in file</Typography>
+                )}
+              </Stack>
+            </Box>
+          )}
+
+          {selectedAttachment.processed_content.error && (
+            <Alert severity="error">
+              {selectedAttachment.processed_content.error}
+            </Alert>
+          )}
+        </Stack>
+      );
+    };
 
     return (
       <Modal
@@ -1234,9 +1367,14 @@ const ChatContent: React.FC = () => {
         }}>
           <Stack spacing={2}>
             <Stack direction="row" justifyContent="space-between" alignItems="center">
-              <Typography variant="h6" component="h2">
-                {selectedAttachment.filename}
-              </Typography>
+              <Stack direction="row" spacing={1} alignItems="center">
+                <Typography variant="h6" component="h2">
+                  {selectedAttachment.filename}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {selectedAttachment.mime_type}
+                </Typography>
+              </Stack>
               <IconButton onClick={handleCloseModal} size="small">
                 <IconX size={20} />
               </IconButton>
@@ -1244,52 +1382,9 @@ const ChatContent: React.FC = () => {
             <Divider />
             <Box sx={{ 
               overflow: 'auto',
-              maxHeight: 'calc(90vh - 140px)'  // Account for header and padding
+              maxHeight: 'calc(90vh - 140px)'
             }}>
-              {selectedAttachment.mime_type?.startsWith('image/') && imageUrl ? (
-                <img 
-                  src={imageUrl}
-                  alt={selectedAttachment.filename}
-                  style={{ 
-                    maxWidth: '100%',
-                    height: 'auto'
-                  }}
-                />
-              ) : selectedAttachment.mime_type === 'application/pdf' ? (
-                <Box sx={{ 
-                  p: 3,
-                  bgcolor: theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
-                  borderRadius: 1,
-                  fontFamily: 'monospace',
-                  fontSize: '0.875rem',
-                  whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-word',
-                  maxHeight: 'calc(90vh - 200px)',
-                  overflow: 'auto'
-                }}>
-                  {selectedAttachment.processed_content?.text || 
-                   (typeof selectedAttachment.processed_content === 'string' 
-                    ? selectedAttachment.processed_content 
-                    : 'No text content available')}
-                </Box>
-              ) : (
-                <Box sx={{ 
-                  p: 3,
-                  bgcolor: theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
-                  borderRadius: 1,
-                  fontFamily: 'monospace',
-                  fontSize: '0.875rem',
-                  whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-word'
-                }}>
-                  <Typography variant="body2" color="text.secondary">
-                    Preview not available for this file type ({selectedAttachment.mime_type})
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                    Content structure: {JSON.stringify(selectedAttachment.processed_content, null, 2)}
-                  </Typography>
-                </Box>
-              )}
+              {renderContent()}
             </Box>
           </Stack>
         </Box>

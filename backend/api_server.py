@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException, Query, Depends, WebSocket, WebSocketDisconnect, BackgroundTasks, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from typing import List, Optional, Dict, Any, Set, Union, Literal
 from pydantic import BaseModel
 import uvicorn
@@ -97,6 +98,9 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
+
+# Mount the files directory
+app.mount("/files", StaticFiles(directory="files"), name="files")
 
 # Initialize thread store and agent
 # Construct PostgreSQL URL from environment variables

@@ -62,9 +62,13 @@ export interface Attachment {
   content?: string;  // base64 string
   mime_type?: string;
   processed_content?: ProcessedContent;
-  file_id?: string;
-  storage_path?: string;
-  storage_backend?: string;
+  file_id?: string;  // Reference to stored file
+  storage_path?: string;  // Path in storage backend
+  storage_backend?: string;  // Storage backend type
+}
+
+export interface MessageAttachment extends Attachment {
+  // Add any frontend-specific fields here if needed
 }
 
 export interface Message {
