@@ -37,8 +37,24 @@ export const createThread = createAsyncThunk(
 export const addMessage = createAsyncThunk(
   'chat/addMessage',
   async ({ threadId, message }: { threadId: string; message: MessageCreate }) => {
-    const response = await axios.post(`${API_BASE_URL}/threads/${threadId}/messages`, message);
-    return response.data;
+    try {
+      const response = await axios.post(
+        `${API_BASE_URL}/threads/${threadId}/messages`, 
+        message,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          maxContentLength: Infinity,
+          maxBodyLength: Infinity
+        }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Error sending message:', error);
+      throw error;
+    }
   }
 );
 

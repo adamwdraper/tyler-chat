@@ -44,6 +44,7 @@ class MessageCreate(BaseModel):
     tool_calls: Optional[list] = None
     attributes: Optional[Dict[str, Any]] = None
     source: Optional[Dict[str, Any]] = None
+    attachments: Optional[List[Dict[str, Any]]] = None
 
 class ThreadCreate(BaseModel):
     title: Optional[str] = None
@@ -214,6 +215,11 @@ async def add_message(
     if not thread:
         raise HTTPException(status_code=404, detail="Thread not found")
     
+    # Convert attachment dicts to Attachment objects if present
+    attachments = None
+    if message.attachments:
+        attachments = [Attachment(**attachment) for attachment in message.attachments]
+    
     new_message = Message(
         role=message.role,
         content=message.content,
@@ -221,7 +227,8 @@ async def add_message(
         tool_call_id=message.tool_call_id,
         tool_calls=message.tool_calls,
         attributes=message.attributes or {},
-        source=message.source
+        source=message.source,
+        attachments=attachments or []
     )
     thread.add_message(new_message)
     

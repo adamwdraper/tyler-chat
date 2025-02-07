@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useCallback } from 'react';
+import React, { useRef, useEffect, useCallback, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
@@ -16,6 +16,7 @@ import {
   keyframes,
   Fade,
   Tooltip,
+  Chip,
 } from '@mui/material';
 import { 
   IconSend, 
@@ -34,6 +35,8 @@ import {
   IconMarkdown,
   IconAbc,
   IconClock,
+  IconPaperclip,
+  IconX,
 } from '@tabler/icons-react';
 import { useSelector } from 'react-redux';
 import { addMessage, processThread, createThread, updateThread, deleteThread } from '@/store/chat/ChatSlice';
@@ -113,6 +116,10 @@ const ChatContent: React.FC = () => {
   const [copiedMessageId, setCopiedMessageId] = React.useState<string | null>(null);
   const [plainTextMessages, setPlainTextMessages] = React.useState<Set<string>>(new Set());
   const [forceUpdate, setForceUpdate] = React.useState(0);
+  const [attachments, setAttachments] = useState<File[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const dropZoneRef = useRef<HTMLDivElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
   
   const { threads, currentThread } = useSelector((state: RootState) => state.chat);
   const activeThread = threads.find((t: Thread) => t.id === currentThread);
@@ -191,40 +198,121 @@ const ChatContent: React.FC = () => {
     setContentHeights(newHeights);
   }, [activeThread?.messages]);
 
+  // Handle file selection from button
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+    setAttachments(prev => [...prev, ...files]);
+    if (event.target) {
+      event.target.value = ''; // Reset input
+    }
+  };
+
+  // Handle drag and drop
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+    setIsDragging(false);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    const files = Array.from(e.dataTransfer.files);
+    setAttachments(prev => [...prev, ...files]);
+  };
+
+  // Remove attachment
+  const handleRemoveAttachment = (index: number) => {
+    setAttachments(prev => prev.filter((_, i) => i !== index));
+  };
+
   const handleSendMessage = async () => {
-    if (!newMessage.trim()) return;
+    if (!newMessage.trim() && attachments.length === 0) return;
 
     let threadId = currentThread;
     
-    // If no active thread, create one first
     if (!threadId) {
       const newThread = await dispatch(createThread({ title: 'New Chat' })).unwrap();
       threadId = newThread.id;
     }
 
-    if (!threadId) return; // Safety check
+    if (!threadId) return;
 
     setIsProcessing(true);
     
     try {
+      // Convert files to base64
+      const fileAttachments = await Promise.all(
+        attachments.map(async (file) => {
+          const base64Content = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              // Extract only the base64 part after the data URL prefix
+              const base64 = (reader.result as string).split(',')[1];
+              resolve(base64);
+            };
+            reader.readAsDataURL(file);
+          });
+
+          return {
+            filename: file.name,
+            content: base64Content,
+            mime_type: file.type,
+            processed_content: null // Let the backend handle processing
+          };
+        })
+      );
+
+      console.log('Sending message with attachments:', {
+        threadId,
+        messageContent: newMessage,
+        attachmentsCount: fileAttachments.length,
+        attachmentDetails: fileAttachments.map(a => ({
+          filename: a.filename,
+          mime_type: a.mime_type,
+          contentLength: a.content.length
+        }))
+      });
+
       // Create message with the new structure
       const messageCreate: MessageCreate = {
         role: 'user',
-        content: newMessage,
+        content: newMessage || '', // Ensure content is never undefined
         attributes: {},
-        attachments: []
+        attachments: fileAttachments
       };
 
-      // Wait for the message to be fully saved before processing
-      const updatedThread = await dispatch(addMessage({
+      const result = await dispatch(addMessage({
         threadId,
         message: messageCreate
       })).unwrap();
 
+      console.log('Message sent successfully:', {
+        threadId: result.id,
+        messageCount: result.messages.length,
+        lastMessage: result.messages[result.messages.length - 1]
+      });
+
       setNewMessage('');
+      setAttachments([]); // Clear attachments after sending
       
-      // Only process after we confirm the message was saved
       await dispatch(processThread(threadId));
+    } catch (error) {
+      console.error('Error sending message:', error);
     } finally {
       setIsProcessing(false);
     }
@@ -728,26 +816,85 @@ const ChatContent: React.FC = () => {
                 {/* Attachments */}
                 {message.attachments && message.attachments.length > 0 && (
                   <Box sx={{ mt: 2 }}>
-                    <Typography variant="subtitle2" gutterBottom>
-                      Attachments ({message.attachments.length})
-                    </Typography>
-                    <Stack direction="row" spacing={2}>
-                      {message.attachments.map((attachment, index) => (
-                        <Paper
-                          key={index}
-                          variant="outlined"
-                          sx={{
-                            p: 2,
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 1
-                          }}
-                        >
-                          <Typography variant="body2">
-                            {attachment.filename}
-                          </Typography>
-                        </Paper>
-                      ))}
+                    <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
+                      {message.attachments.map((attachment, index) => {
+                        const getImageUrl = (content: any): string | null => {
+                          if (!content) return null;
+                          if (typeof content === 'string') {
+                            return content.startsWith('data:') 
+                              ? content 
+                              : `data:${attachment.mime_type};base64,${content}`;
+                          }
+                          if (content.content) {
+                            return `data:${content.mime_type || attachment.mime_type};base64,${content.content}`;
+                          }
+                          if (content.url) return content.url;
+                          return null;
+                        };
+
+                        const imageUrl = getImageUrl(attachment.processed_content);
+                        
+                        if (attachment.mime_type?.startsWith('image/')) {
+                          return (
+                            <Box 
+                              key={index}
+                              sx={{ 
+                                width: '100%',
+                                overflow: 'hidden',
+                                borderRadius: 1,
+                                border: 1,
+                                borderColor: 'divider',
+                                p: 2,
+                                display: 'flex',
+                                justifyContent: 'center',
+                                alignItems: 'center'
+                              }}
+                            >
+                              {imageUrl ? (
+                                <img 
+                                  src={imageUrl}
+                                  alt={attachment.filename}
+                                  style={{ 
+                                    maxWidth: '100%',
+                                    maxHeight: '300px',
+                                    height: 'auto',
+                                    display: 'block',
+                                    objectFit: 'contain'
+                                  }}
+                                  onError={(e) => {
+                                    console.error('Image failed to load:', {
+                                      src: imageUrl,
+                                      error: e
+                                    });
+                                  }}
+                                />
+                              ) : (
+                                <Box sx={{ p: 2, textAlign: 'center' }}>
+                                  <Typography variant="body2" color="text.secondary">
+                                    Processing image...
+                                  </Typography>
+                                </Box>
+                              )}
+                            </Box>
+                          );
+                        }
+                        
+                        return (
+                          <Chip
+                            key={index}
+                            label={attachment.filename}
+                            variant="outlined"
+                            size="medium"
+                            icon={<IconPaperclip size={16} />}
+                            sx={{
+                              '& .MuiChip-label': {
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis'
+                              }
+                            }}
+                          />
+                        );
+                      })}
                     </Stack>
                   </Box>
                 )}
@@ -967,6 +1114,11 @@ const ChatContent: React.FC = () => {
         flexDirection: 'column',
         bgcolor: 'background.paper',
       }}
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+      ref={dropZoneRef}
     >
       {activeThread && (
         <Box sx={{ 
@@ -1157,36 +1309,126 @@ const ChatContent: React.FC = () => {
       </Box>
 
       <Box sx={{ p: 3, borderTop: `1px solid ${theme.palette.divider}`, bgcolor: 'background.default' }}>
-        <Stack direction="row" spacing={2} alignItems="flex-end">
-          <TextField
-            fullWidth
-            multiline
-            maxRows={4}
-            value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
-            onKeyPress={handleKeyPress}
-            placeholder="Type your message..."
-            variant="outlined"
-            size="small"
-            disabled={isProcessing}
-          />
-          <IconButton
-            color="primary"
-            onClick={handleSendMessage}
-            disabled={!newMessage.trim() || isProcessing}
+        {isDragging && (
+          <Box
             sx={{
-              bgcolor: 'primary.light',
-              width: 40,
-              height: 40,
-              flexShrink: 0,
-              '&:hover': {
-                bgcolor: 'primary.main',
-                color: 'white',
-              },
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              bgcolor: 'rgba(0, 0, 0, 0.1)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 1000,
+              border: '2px dashed',
+              borderColor: 'primary.main',
             }}
           >
-            <IconSend size={18} />
-          </IconButton>
+            <Typography variant="h6" color="primary">
+              Drop files here
+            </Typography>
+          </Box>
+        )}
+        
+        <Stack direction="row" alignItems="flex-end">
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileSelect}
+            style={{ display: 'none' }}
+            multiple
+          />
+          <Box sx={{ 
+            flexGrow: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 1.5,
+          }}>
+            <Box sx={{ 
+              border: 1,
+              borderColor: 'divider',
+              borderRadius: 1,
+              bgcolor: 'background.paper',
+              '& .MuiOutlinedInput-notchedOutline': {
+                border: 'none'
+              }
+            }}>
+              <TextField
+                fullWidth
+                multiline
+                maxRows={4}
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder="Type your message..."
+                variant="outlined"
+                size="small"
+                disabled={isProcessing}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    border: 'none',
+                    borderRadius: '8px 8px 0 0',
+                    padding: '12px',
+                  }
+                }}
+              />
+              <Box sx={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center',
+                px: 1.5,
+                py: 0.5
+              }}>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <IconButton
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isProcessing}
+                    size="small"
+                    sx={{
+                      color: 'text.secondary',
+                      '&:hover': {
+                        color: 'primary.main',
+                      },
+                    }}
+                  >
+                    <IconPaperclip size={20} />
+                  </IconButton>
+                  {attachments.length > 0 && (
+                    <Stack direction="row" spacing={1} flexWrap="wrap" gap={1}>
+                      {attachments.map((file, index) => (
+                        <Chip
+                          key={index}
+                          label={file.name}
+                          onDelete={() => handleRemoveAttachment(index)}
+                          deleteIcon={<IconX size={14} />}
+                          variant="outlined"
+                          size="small"
+                        />
+                      ))}
+                    </Stack>
+                  )}
+                </Stack>
+                <IconButton
+                  color="primary"
+                  onClick={handleSendMessage}
+                  disabled={(!newMessage.trim() && attachments.length === 0) || isProcessing}
+                  sx={{
+                    color: 'primary.main',
+                    '&:hover': {
+                      color: 'primary.dark',
+                    },
+                    '&.Mui-disabled': {
+                      color: 'text.disabled',
+                    }
+                  }}
+                >
+                  <IconSend size={18} />
+                </IconButton>
+              </Box>
+            </Box>
+          </Box>
         </Stack>
       </Box>
     </Box>
