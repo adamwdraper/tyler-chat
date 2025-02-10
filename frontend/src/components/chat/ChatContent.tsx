@@ -118,6 +118,7 @@ const ChatContent: React.FC = () => {
   const [contentHeights, setContentHeights] = React.useState<Map<string, number>>(new Map());
   const [isNewTitle, setIsNewTitle] = React.useState(false);
   const [fadeIn, setFadeIn] = React.useState(true);
+  const [expandedSystemMessages, setExpandedSystemMessages] = React.useState<Set<string>>(new Set());
   const contentRefs = React.useRef<Map<string, HTMLDivElement>>(new Map());
   const [hoveredMessageId, setHoveredMessageId] = React.useState<string | null>(null);
   const maxHeight = 300; // About 15 lines of text
@@ -720,23 +721,21 @@ const ChatContent: React.FC = () => {
       {metrics?.usage?.total_tokens > 0 && (
         <Tooltip
           title={
-            <Box sx={{ p: 1, fontFamily: 'monospace' }}>
-                <Box sx={{ color: 'primary.light', mb: 0.5 }}>
-                  {metrics.model || 'Unknown Model'}:
-                </Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100' }}>
-                  <span>Prompt:</span>
-                  <span>{metrics.usage.prompt_tokens.toLocaleString()}</span>
-                </Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100' }}>
-                  <span>Completion:</span>
-                  <span>{metrics.usage.completion_tokens.toLocaleString()}</span>
-                </Box>
-                <Divider sx={{ my: 0.5, borderColor: 'rgba(255, 255, 255, 0.2)' }} />
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100' }}>
-                  <span>Total:</span>
-                  <span>{metrics.usage.total_tokens.toLocaleString()}</span>
-                </Box>
+            <Box sx={{ p: 1, fontFamily: 'monospace', color: 'common.white' }}>
+              {metrics.model || 'Unknown Model'}:
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+                <span>Prompt:</span>
+                <span>{metrics.usage.prompt_tokens.toLocaleString()}</span>
+              </Box>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+                <span>Completion:</span>
+                <span>{metrics.usage.completion_tokens.toLocaleString()}</span>
+              </Box>
+              <Divider sx={{ my: 0.5, borderColor: 'rgba(255, 255, 255, 0.2)' }} />
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+                <span>Total:</span>
+                <span>{metrics.usage.total_tokens.toLocaleString()}</span>
+              </Box>
             </Box>
           }
           arrow
@@ -828,6 +827,8 @@ const ChatContent: React.FC = () => {
     maxHeight,
     plainTextMessages,
     messages,
+    toggleSystemMessage,
+    expandedSystemMessages,
   }: {
     message: Message;
     isLastMessage: boolean;
@@ -839,6 +840,8 @@ const ChatContent: React.FC = () => {
     maxHeight: number;
     plainTextMessages: Set<string>;
     messages: Message[];
+    toggleSystemMessage: (messageId: string) => void;
+    expandedSystemMessages: Set<string>;
   }) => {
     const [isHovered, setIsHovered] = React.useState(false);
     const [isCopied, setIsCopied] = React.useState(false);
@@ -847,6 +850,8 @@ const ChatContent: React.FC = () => {
     const shouldShowExpand = contentHeight > maxHeight;
     const isToolRelated = message.role === 'tool' || !!message.tool_call_id;
     const isPlainText = plainTextMessages.has(message.id);
+    const isSystemMessage = message.role === 'system';
+    const isSystemExpanded = expandedSystemMessages.has(message.id);
 
     const handleCopyMessage = React.useCallback(async () => {
       let textToCopy = '';
@@ -874,6 +879,52 @@ const ChatContent: React.FC = () => {
       }
     }, [message.id, contentRefs]);
 
+    // Special render for collapsed system message
+    if (isSystemMessage && !isSystemExpanded) {
+      return (
+        <Box 
+          onClick={() => toggleSystemMessage(message.id)}
+          sx={{ 
+            cursor: 'pointer',
+            '&:hover': {
+              bgcolor: 'action.hover'
+            }
+          }}
+        >
+          <Box p={3} sx={{ display: 'flex', justifyContent: 'center' }}>
+            <Box sx={{ width: '100%', maxWidth: 900 }}>
+              <Stack direction="row" gap="16px" alignItems="center">
+                <Avatar
+                  sx={{
+                    bgcolor: getMessageColor('system'),
+                    width: 40,
+                    height: 40,
+                    color: 'white'
+                  }}
+                >
+                  <IconCode size={24} />
+                </Avatar>
+                <Stack 
+                  direction="row" 
+                  alignItems="center" 
+                  sx={{ 
+                    flex: 1,
+                    justifyContent: 'space-between'
+                  }}
+                >
+                  <Typography variant="body2" color="text.secondary">
+                    System Message
+                  </Typography>
+                  <IconChevronDown size={16} style={{ color: theme.palette.text.secondary }} />
+                </Stack>
+              </Stack>
+            </Box>
+          </Box>
+          {!isLastMessage && <Divider />}
+        </Box>
+      );
+    }
+
     return (
       <Box 
         onMouseEnter={() => setIsHovered(true)}
@@ -894,12 +945,33 @@ const ChatContent: React.FC = () => {
                 {getMessageIcon(message.role)}
               </Avatar>
               <Box sx={{ flex: 1, mt: '10px' }}>
+                {isSystemMessage && (
+                  <Stack 
+                    direction="row" 
+                    alignItems="center" 
+                    sx={{ 
+                      mb: 1, 
+                      cursor: 'pointer',
+                      color: 'text.secondary',
+                      justifyContent: 'space-between',
+                      '&:hover': {
+                        color: 'text.primary'
+                      }
+                    }}
+                    onClick={() => toggleSystemMessage(message.id)}
+                  >
+                    <Typography variant="body2">
+                      System Message
+                    </Typography>
+                    <IconChevronUp size={16} />
+                  </Stack>
+                )}
                 {message.content && (
                   <>
                     <Box
                       sx={{
                         position: 'relative',
-                        maxHeight: isExpanded ? 'none' : maxHeight,
+                        maxHeight: isSystemMessage ? 'none' : (isExpanded ? 'none' : maxHeight),
                         overflow: 'hidden'
                       }}
                     >
@@ -943,7 +1015,7 @@ const ChatContent: React.FC = () => {
                       >
                         {renderContent(message.content, message.role, message, messages)}
                       </Box>
-                      {!isExpanded && shouldShowExpand && (
+                      {!isSystemMessage && !isExpanded && shouldShowExpand && (
                         <Box
                           sx={{
                             position: 'absolute',
@@ -972,7 +1044,7 @@ const ChatContent: React.FC = () => {
                         </Box>
                       )}
                     </Box>
-                    {isExpanded && shouldShowExpand && (
+                    {!isSystemMessage && isExpanded && shouldShowExpand && (
                       <Box sx={{ textAlign: 'center', mt: 1 }}>
                         <Button
                           size="small"
@@ -1158,13 +1230,14 @@ const ChatContent: React.FC = () => {
       </Box>
     );
   }, (prevProps, nextProps) => {
-    // Custom comparison function for React.memo
     return (
       prevProps.message.id === nextProps.message.id &&
       prevProps.isLastMessage === nextProps.isLastMessage &&
       prevProps.expandedMessages.has(prevProps.message.id) === nextProps.expandedMessages.has(nextProps.message.id) &&
       prevProps.contentHeights.get(prevProps.message.id) === nextProps.contentHeights.get(nextProps.message.id) &&
-      prevProps.plainTextMessages.has(prevProps.message.id) === nextProps.plainTextMessages.has(nextProps.message.id)
+      prevProps.plainTextMessages.has(prevProps.message.id) === nextProps.plainTextMessages.has(nextProps.message.id) &&
+      prevProps.expandedSystemMessages.has(prevProps.message.id) === nextProps.expandedSystemMessages.has(nextProps.message.id) &&
+      prevProps.toggleSystemMessage === nextProps.toggleSystemMessage
     );
   });
 
@@ -1187,6 +1260,8 @@ const ChatContent: React.FC = () => {
         maxHeight={maxHeight}
         plainTextMessages={plainTextMessages}
         messages={messages}
+        toggleSystemMessage={toggleSystemMessage}
+        expandedSystemMessages={expandedSystemMessages}
       />
     );
   };
@@ -1580,6 +1655,19 @@ const ChatContent: React.FC = () => {
     handleMenuClose();
   };
 
+  // Add new function to toggle system message expansion
+  const toggleSystemMessage = (messageId: string) => {
+    setExpandedSystemMessages(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(messageId)) {
+        newSet.delete(messageId);
+      } else {
+        newSet.add(messageId);
+      }
+      return newSet;
+    });
+  };
+
   return (
     <Box
       sx={{
@@ -1622,16 +1710,16 @@ const ChatContent: React.FC = () => {
             <Stack direction="row" spacing={1} alignItems="center">
               <Tooltip
                 title={
-                  <Box sx={{ p: 1, fontFamily: 'monospace' }}>
+                  <Box sx={{ p: 1, fontFamily: 'monospace', color: 'common.white' }}>
                     {activeThread && (() => {
                       const { tools, total_calls } = calculateToolUsage();
                       const toolNames = Object.keys(tools);
                       
                       return (
                         <>
-                          <Box sx={{ color: 'primary.light', mb: 0.5 }}>Tool Usage:</Box>
+                          <Box sx={{ mb: 0.5 }}>Tool Usage:</Box>
                           {toolNames.map((toolName) => (
-                            <Box key={toolName} sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100' }}>
+                            <Box key={toolName} sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
                               <span>{toolName}:</span>
                               <span>{tools[toolName]}</span>
                             </Box>
@@ -1639,14 +1727,14 @@ const ChatContent: React.FC = () => {
                           {toolNames.length > 1 && (
                             <>
                               <Divider sx={{ my: 0.5, borderColor: 'rgba(255, 255, 255, 0.2)' }} />
-                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100' }}>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
                                 <span>Total:</span>
                                 <span>{total_calls}</span>
                               </Box>
                             </>
                           )}
                           {toolNames.length === 0 && (
-                            <Box sx={{ color: 'grey.100' }}>No tools used</Box>
+                            <Box>No tools used</Box>
                           )}
                         </>
                       );
@@ -1667,52 +1755,52 @@ const ChatContent: React.FC = () => {
             <Stack direction="row" spacing={1} alignItems="center">
               <Tooltip
                 title={
-                  <Box sx={{ p: 1, fontFamily: 'monospace' }}>
+                  <Box sx={{ p: 1, fontFamily: 'monospace', color: 'common.white' }}>
                     {activeThread && (() => {
                       const { modelUsage, overall } = calculateTokenUsage();
                       const modelCount = Object.keys(modelUsage).length;
                       
                       return (
                         <>
-                          <Box sx={{ color: 'primary.light', mb: 0.5 }}>Token Usage by Model:</Box>
+                          <Box sx={{ mb: 0.5 }}>Token Usage by Model:</Box>
                           {Object.entries(modelUsage || {}).map(([model, usage]) => (
                             <Box key={model}>
-                              <Box sx={{ color: 'primary.light', mt: 1, mb: 0.5 }}>
+                              <Box sx={{ mt: 1, mb: 0.5 }}>
                                 {model}:
                               </Box>
-                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100' }}>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
                                 <span>Prompt:</span>
                                 <span>{usage.prompt_tokens.toLocaleString()}</span>
                               </Box>
-                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100' }}>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
                                 <span>Completion:</span>
                                 <span>{usage.completion_tokens.toLocaleString()}</span>
                               </Box>
                               <Divider sx={{ my: 0.5, borderColor: 'rgba(255, 255, 255, 0.2)' }} />
-                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100' }}>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
                                 <span>Total:</span>
                                 <span>{usage.total_tokens.toLocaleString()}</span>
                               </Box>
-                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100', fontSize: '0.85em' }}>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, fontSize: '0.85em' }}>
                                 <span>Calls:</span>
                                 <span>{usage.calls}</span>
                               </Box>
-                              {modelCount > 1 && <Divider sx={{ my: 1 }} />}
+                              {modelCount > 1 && <Divider sx={{ my: 1, borderColor: 'rgba(255, 255, 255, 0.2)' }} />}
                             </Box>
                           ))}
                           {modelCount > 1 && (
                             <Box sx={{ mt: 1 }}>
-                              <Box sx={{ color: 'primary.light', mb: 0.5 }}>Overall Usage:</Box>
-                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100' }}>
+                              <Box sx={{ mb: 0.5 }}>Overall Usage:</Box>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
                                 <span>Prompt:</span>
                                 <span>{overall.prompt_tokens.toLocaleString()}</span>
                               </Box>
-                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100' }}>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
                                 <span>Completion:</span>
                                 <span>{overall.completion_tokens.toLocaleString()}</span>
                               </Box>
                               <Divider sx={{ my: 0.5, borderColor: 'rgba(255, 255, 255, 0.2)' }} />
-                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100' }}>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
                                 <span>Total:</span>
                                 <span>{overall.total_tokens.toLocaleString()}</span>
                               </Box>
