@@ -21,6 +21,7 @@ import {
   Alert,
   Menu,
   MenuItem,
+  Link,
 } from '@mui/material';
 import { 
   IconSend, 
@@ -546,6 +547,28 @@ const ChatContent: React.FC = () => {
             <Typography variant="body1" component="p">
               {children}
             </Typography>
+          ),
+          a: ({ href, children }) => (
+            <Link
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              sx={{
+                color: 'primary.main',
+                textDecoration: 'none',
+                fontWeight: 500,
+                '&:hover': {
+                  color: 'primary.dark',
+                  textDecoration: 'underline',
+                },
+                '&:visited': {
+                  color: 'secondary.main',
+                },
+                transition: 'color 0.2s ease-in-out',
+              }}
+            >
+              {children}
+            </Link>
           ),
         }}
       >
