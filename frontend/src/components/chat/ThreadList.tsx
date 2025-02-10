@@ -63,16 +63,16 @@ const ThreadList: React.FC<Props> = ({ showMobileSidebar }) => {
     >
       <Box sx={{ p: 3 }}>
         <Stack direction="row" alignItems="center" justifyContent="space-between">
-          <Typography variant="h5">Chats</Typography>
+          <Typography variant="h5">Threads</Typography>
           <IconButton
             color="primary"
             onClick={handleNewChat}
             size="small"
             sx={{
-              bgcolor: 'primary.light',
+              bgcolor: theme => theme.palette.mode === 'dark' ? 'rgba(93, 135, 255, 0.1)' : 'primary.light',
               color: 'primary.main',
               '&:hover': {
-                bgcolor: 'primary.lighter',
+                bgcolor: theme => theme.palette.mode === 'dark' ? 'rgba(93, 135, 255, 0.2)' : 'primary.lighter',
               },
             }}
           >

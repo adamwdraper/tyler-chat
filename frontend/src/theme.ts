@@ -1,21 +1,28 @@
 import { createTheme } from '@mui/material/styles';
+import useMediaQuery from '@mui/material/useMediaQuery';
+import { useMemo } from 'react';
 
-// Create a theme instance.
-const theme = createTheme({
+// Theme options for light and dark mode
+const getDesignTokens = (mode: 'light' | 'dark') => ({
   palette: {
+    mode,
     primary: {
       main: '#5D87FF',
-      light: '#ECF2FF',
+      light: mode === 'light' ? '#ECF2FF' : '#4570EA',
       dark: '#4570EA',
     },
     secondary: {
       main: '#49BEFF',
-      light: '#E8F7FF',
+      light: mode === 'light' ? '#E8F7FF' : '#23afdb',
       dark: '#23afdb',
     },
     background: {
-      default: '#FFFFFF',
-      paper: '#FFFFFF',
+      default: mode === 'light' ? '#FFFFFF' : '#0A0A0A',
+      paper: mode === 'light' ? '#FFFFFF' : '#1A1A1A',
+    },
+    text: {
+      primary: mode === 'light' ? '#000000' : '#FFFFFF',
+      secondary: mode === 'light' ? '#424242' : '#B0B0B0',
     },
   },
   shape: {
@@ -54,7 +61,7 @@ const theme = createTheme({
       lineHeight: '1.2rem',
     },
     button: {
-      textTransform: 'capitalize',
+      textTransform: 'none' as const,
       fontWeight: 400,
     },
   },
@@ -72,13 +79,16 @@ const theme = createTheme({
         root: {
           borderRadius: '7px',
           padding: '0',
+          background: mode === 'dark' ? '#1A1A1A' : '#FFFFFF',
         },
       },
     },
     MuiPopover: {
       styleOverrides: {
         paper: {
-          boxShadow: '0px 0px 15px rgba(0,0,0,0.1)',
+          boxShadow: mode === 'dark' 
+            ? '0px 0px 15px rgba(0,0,0,0.3)' 
+            : '0px 0px 15px rgba(0,0,0,0.1)',
           borderRadius: '7px',
         }
       }
@@ -86,7 +96,9 @@ const theme = createTheme({
     MuiMenu: {
       styleOverrides: {
         paper: {
-          boxShadow: '0px 0px 15px rgba(0,0,0,0.1)',
+          boxShadow: mode === 'dark' 
+            ? '0px 0px 15px rgba(0,0,0,0.3)' 
+            : '0px 0px 15px rgba(0,0,0,0.1)',
           borderRadius: '7px',
         },
         list: {
@@ -100,7 +112,9 @@ const theme = createTheme({
           borderRadius: '7px',
           padding: '10px 12px',
           '&:hover': {
-            backgroundColor: 'rgba(93, 135, 255, 0.05)'
+            backgroundColor: mode === 'dark' 
+              ? 'rgba(93, 135, 255, 0.15)' 
+              : 'rgba(93, 135, 255, 0.05)'
           }
         }
       }
@@ -108,4 +122,14 @@ const theme = createTheme({
   },
 });
 
-export default theme; 
+export function useTheme() {
+  const prefersDarkMode = useMediaQuery('(prefers-color-scheme: dark)');
+  
+  return useMemo(
+    () => createTheme(getDesignTokens(prefersDarkMode ? 'dark' : 'light')),
+    [prefersDarkMode]
+  );
+}
+
+// For static theme usage (fallback)
+export default createTheme(getDesignTokens('light')); 
