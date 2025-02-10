@@ -860,178 +860,182 @@ const ChatContent: React.FC = () => {
               </Avatar>
               <Box sx={{ flex: 1, mt: '10px' }}>
                 {message.content && (
-                  <Box
-                    sx={{
-                      position: 'relative',
-                      maxHeight: isExpanded ? 'none' : maxHeight,
-                      overflow: 'hidden'
-                    }}
-                  >
+                  <>
                     <Box
-                      ref={setContentRef}
                       sx={{
-                        '& p': { 
-                          m: 0, 
-                          lineHeight: 1.5 
-                        },
-                        '& p + p': { 
-                          mt: 1.5 
-                        },
-                        '& pre': {
-                          m: 0,
-                          p: 2,
-                          borderRadius: 1,
-                          bgcolor: theme => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
-                          border: 1,
-                          borderColor: theme => theme.palette.mode === 'dark' ? 'grey.700' : 'grey.200',
-                          fontFamily: 'monospace',
-                          fontSize: '0.875rem',
-                          overflow: 'auto',
-                          whiteSpace: 'pre-wrap',
-                          wordWrap: 'break-word',
-                        },
-                        '& code': {
-                          fontFamily: 'monospace',
-                          fontSize: '0.875rem',
-                          p: 0.5,
-                          borderRadius: 0.5,
-                          bgcolor: theme => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
-                          color: theme => theme.palette.mode === 'dark' ? '#ce9178' : '#a31515',
-                        },
-                        '& pre code': {
-                          p: 0,
-                          bgcolor: 'transparent',
-                          color: 'text.primary',
-                        },
+                        position: 'relative',
+                        maxHeight: isExpanded ? 'none' : maxHeight,
+                        overflow: 'hidden'
                       }}
                     >
-                      {renderContent(message.content, message.role, message, [])}
-                    </Box>
-                    {message.attachments && message.attachments.length > 0 && (
-                      <Box sx={{ mt: 2 }}>
-                        <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
-                          {message.attachments.map((attachment, index) => {
-                            const imageUrl = getImageUrl(attachment.processed_content, attachment.mime_type);
-                            
-                            if (attachment.mime_type?.startsWith('image/')) {
-                              return (
-                                <Box 
-                                  key={index}
-                                  sx={{ 
-                                    width: '100%',
-                                    overflow: 'hidden',
-                                    borderRadius: 1,
-                                    border: 1,
-                                    borderColor: 'divider',
-                                    p: 2,
-                                    display: 'flex',
-                                    justifyContent: 'center',
-                                    alignItems: 'center',
-                                    cursor: 'pointer'
-                                  }}
-                                  onClick={() => handleAttachmentClick(attachment)}
-                                >
-                                  {imageUrl ? (
-                                    <Box sx={{ 
-                                      height: '100%', 
-                                      display: 'flex', 
-                                      alignItems: 'center', 
-                                      justifyContent: 'center'
-                                    }}>
-                                      <img 
-                                        src={imageUrl}
-                                        alt={attachment.filename}
-                                        style={{ 
-                                          maxWidth: '100%',
-                                          height: 'auto',
-                                          maxHeight: 300,
-                                          display: 'block',
-                                          margin: '0 auto',
-                                          borderRadius: theme.shape.borderRadius
-                                        }}
-                                        onError={(e) => {
-                                          console.error('Image failed to load:', {
-                                            src: imageUrl,
-                                            error: e
-                                          });
-                                        }}
-                                      />
-                                    </Box>
-                                  ) : (
-                                    <Box sx={{ p: 2, textAlign: 'center' }}>
-                                      <Typography variant="body2" color="text.secondary">
-                                        Processing image...
-                                      </Typography>
-                                    </Box>
-                                  )}
-                                </Box>
-                              );
-                            }
-                            
-                            return (
-                              <Chip
-                                key={index}
-                                label={attachment.filename}
-                                variant="outlined"
-                                size="medium"
-                                icon={<IconPaperclip size={16} />}
-                                onClick={() => handleAttachmentClick(attachment)}
-                                sx={{
-                                  cursor: 'pointer',
-                                  '& .MuiChip-label': {
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis'
-                                  },
-                                  '&:hover': {
-                                    bgcolor: 'action.hover'
-                                  }
-                                }}
-                              />
-                            );
-                          })}
-                        </Stack>
-                      </Box>
-                    )}
-                    {!isExpanded && shouldShowExpand && (
                       <Box
+                        ref={setContentRef}
                         sx={{
-                          position: 'absolute',
-                          bottom: 0,
-                          left: 0,
-                          right: 0,
-                          height: '110px',
-                          background: theme => theme.palette.mode === 'dark' 
-                            ? 'linear-gradient(180deg, transparent 0%, rgba(33,33,33,0.8) 50%, rgba(33,33,33,0.95) 100%)'
-                            : 'linear-gradient(180deg, transparent 0%, rgba(255,255,255,0.8) 50%, rgba(255,255,255,0.95) 100%)',
-                          display: 'flex',
-                          alignItems: 'flex-end',
-                          justifyContent: 'center',
-                          pt: 4
+                          '& p': { 
+                            m: 0, 
+                            lineHeight: 1.5 
+                          },
+                          '& p + p': { 
+                            mt: 1.5 
+                          },
+                          '& pre': {
+                            m: 0,
+                            p: 2,
+                            borderRadius: 1,
+                            bgcolor: theme => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
+                            border: 1,
+                            borderColor: theme => theme.palette.mode === 'dark' ? 'grey.700' : 'grey.200',
+                            fontFamily: 'monospace',
+                            fontSize: '0.875rem',
+                            overflow: 'auto',
+                            whiteSpace: 'pre-wrap',
+                            wordWrap: 'break-word',
+                          },
+                          '& code': {
+                            fontFamily: 'monospace',
+                            fontSize: '0.875rem',
+                            p: 0.5,
+                            borderRadius: 0.5,
+                            bgcolor: theme => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
+                            color: theme => theme.palette.mode === 'dark' ? '#ce9178' : '#a31515',
+                          },
+                          '& pre code': {
+                            p: 0,
+                            bgcolor: 'transparent',
+                            color: 'text.primary',
+                          },
                         }}
                       >
+                        {renderContent(message.content, message.role, message, [])}
+                      </Box>
+                      {!isExpanded && shouldShowExpand && (
+                        <Box
+                          sx={{
+                            position: 'absolute',
+                            bottom: 0,
+                            left: 0,
+                            right: 0,
+                            height: '110px',
+                            background: theme => theme.palette.mode === 'dark' 
+                              ? 'linear-gradient(180deg, transparent 0%, rgba(33,33,33,0.8) 50%, rgba(33,33,33,0.95) 100%)'
+                              : 'linear-gradient(180deg, transparent 0%, rgba(255,255,255,0.8) 50%, rgba(255,255,255,0.95) 100%)',
+                            display: 'flex',
+                            alignItems: 'flex-end',
+                            justifyContent: 'center',
+                            pt: 4
+                          }}
+                        >
+                          <Button
+                            size="small"
+                            variant="text"
+                            onClick={() => toggleMessageExpand(message.id)}
+                            startIcon={<IconChevronDown size={16} />}
+                            sx={{ mb: 1 }}
+                          >
+                            More
+                          </Button>
+                        </Box>
+                      )}
+                    </Box>
+                    {isExpanded && shouldShowExpand && (
+                      <Box sx={{ textAlign: 'center', mt: 1 }}>
                         <Button
                           size="small"
                           variant="text"
                           onClick={() => toggleMessageExpand(message.id)}
-                          startIcon={<IconChevronDown size={16} />}
-                          sx={{ mb: 1 }}
+                          startIcon={<IconChevronUp size={16} />}
                         >
-                          More
+                          Less
                         </Button>
                       </Box>
                     )}
-                  </Box>
+                  </>
                 )}
-                {isExpanded && shouldShowExpand && (
-                  <Box sx={{ textAlign: 'center', mt: 1 }}>
-                    <Button
-                      size="small"
-                      variant="text"
-                      onClick={() => toggleMessageExpand(message.id)}
-                      startIcon={<IconChevronUp size={16} />}
-                    >
-                      Less
-                    </Button>
+
+                {/* Attachments section - outside of height restriction */}
+                {message.attachments && message.attachments.length > 0 && (
+                  <Box sx={{ mt: 2 }}>
+                    <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
+                      {message.attachments.map((attachment, index) => {
+                        const imageUrl = getImageUrl(attachment.processed_content, attachment.mime_type);
+                        
+                        if (attachment.mime_type?.startsWith('image/')) {
+                          return (
+                            <Box 
+                              key={index}
+                              sx={{ 
+                                width: '100%',
+                                overflow: 'hidden',
+                                borderRadius: 1,
+                                border: 1,
+                                borderColor: 'divider',
+                                p: 2,
+                                display: 'flex',
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                                cursor: 'pointer'
+                              }}
+                              onClick={() => handleAttachmentClick(attachment)}
+                            >
+                              {imageUrl ? (
+                                <Box sx={{ 
+                                  height: '100%', 
+                                  display: 'flex', 
+                                  alignItems: 'center', 
+                                  justifyContent: 'center'
+                                }}>
+                                  <img 
+                                    src={imageUrl}
+                                    alt={attachment.filename}
+                                    style={{ 
+                                      maxWidth: '100%',
+                                      height: 'auto',
+                                      maxHeight: 300,
+                                      display: 'block',
+                                      margin: '0 auto',
+                                      borderRadius: theme.shape.borderRadius
+                                    }}
+                                    onError={(e) => {
+                                      console.error('Image failed to load:', {
+                                        src: imageUrl,
+                                        error: e
+                                      });
+                                    }}
+                                  />
+                                </Box>
+                              ) : (
+                                <Box sx={{ p: 2, textAlign: 'center' }}>
+                                  <Typography variant="body2" color="text.secondary">
+                                    Processing image...
+                                  </Typography>
+                                </Box>
+                              )}
+                            </Box>
+                          );
+                        }
+                        
+                        return (
+                          <Chip
+                            key={index}
+                            label={attachment.filename}
+                            variant="outlined"
+                            size="medium"
+                            icon={<IconPaperclip size={16} />}
+                            onClick={() => handleAttachmentClick(attachment)}
+                            sx={{
+                              cursor: 'pointer',
+                              '& .MuiChip-label': {
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis'
+                              },
+                              '&:hover': {
+                                bgcolor: 'action.hover'
+                              }
+                            }}
+                          />
+                        );
+                      })}
+                    </Stack>
                   </Box>
                 )}
 
