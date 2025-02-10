@@ -986,7 +986,7 @@ const ChatContent: React.FC = () => {
                 <Box 
                   sx={{ 
                     display: 'flex',
-                    justifyContent: 'flex-end',
+                    justifyContent: 'space-between',
                     alignItems: 'center',
                     mt: 1,
                     gap: 2,
@@ -994,83 +994,87 @@ const ChatContent: React.FC = () => {
                     typography: 'caption',
                   }}
                 >
-                  <Fade in={isHovered}>
-                    <Box sx={{ display: 'flex', gap: 2 }}>
-                      <IconButton
-                        onClick={() => handleCopyMessage(message)}
-                        size="small"
-                        sx={{ 
-                          p: 0.5,
-                          color: 'text.secondary',
-                          '&:hover': {
-                            color: 'primary.main',
-                          }
-                        }}
-                      >
-                        {copiedMessageId === message.id ? <IconCheck size={14} /> : <IconCopy size={14} />}
-                      </IconButton>
-                      {!isToolRelated && (
-                        <Tooltip title={isPlainText ? "Show as Markdown" : "Show as plain text"}>
-                          <IconButton
-                            onClick={() => toggleMessageFormat(message.id)}
-                            size="small"
-                            sx={{ 
-                              p: 0.5,
-                              color: 'text.secondary',
-                              '&:hover': {
-                                color: 'primary.main',
-                              }
-                            }}
-                          >
-                            {isPlainText ? <IconMarkdown size={14} /> : <IconAbc size={14} />}
-                          </IconButton>
-                        </Tooltip>
-                      )}
-                    </Box>
-                  </Fade>
-                  {message.metrics && (
-                    <>
-                      {message.metrics.usage?.total_tokens > 0 && (
-                        <Tooltip
-                          title={
-                            <Box sx={{ p: 1, fontFamily: 'monospace' }}>
-                                <Box sx={{ color: 'primary.light', mb: 0.5 }}>
-                                  {message.metrics.model || 'Unknown Model'}:
-                                </Box>
-                                <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100' }}>
-                                  <span>Prompt:</span>
-                                  <span>{message.metrics.usage.prompt_tokens.toLocaleString()}</span>
-                                </Box>
-                                <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100' }}>
-                                  <span>Completion:</span>
-                                  <span>{message.metrics.usage.completion_tokens.toLocaleString()}</span>
-                                </Box>
-                                <Divider sx={{ my: 0.5, borderColor: 'rgba(255, 255, 255, 0.2)' }} />
-                                <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100' }}>
-                                  <span>Total:</span>
-                                  <span>{message.metrics.usage.total_tokens.toLocaleString()}</span>
-                                </Box>
-                            </Box>
-                          }
-                          arrow
-                          placement="top"
+                  <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                    <Fade in={isHovered}>
+                      <Box sx={{ display: 'flex', gap: 2 }}>
+                        <IconButton
+                          onClick={() => handleCopyMessage(message)}
+                          size="small"
+                          sx={{ 
+                            p: 0.5,
+                            color: 'text.secondary',
+                            '&:hover': {
+                              color: 'primary.main',
+                            }
+                          }}
                         >
-                          <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'default' }}>
-                            <IconPlaystationCircle size={14} />
-                            {message.metrics.usage.total_tokens.toLocaleString()}
+                          {copiedMessageId === message.id ? <IconCheck size={14} /> : <IconCopy size={14} />}
+                        </IconButton>
+                        {!isToolRelated && (
+                          <Tooltip title={isPlainText ? "Show as Markdown" : "Show as plain text"}>
+                            <IconButton
+                              onClick={() => toggleMessageFormat(message.id)}
+                              size="small"
+                              sx={{ 
+                                p: 0.5,
+                                color: 'text.secondary',
+                                '&:hover': {
+                                  color: 'primary.main',
+                                }
+                              }}
+                            >
+                              {isPlainText ? <IconMarkdown size={14} /> : <IconAbc size={14} />}
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                      </Box>
+                    </Fade>
+                  </Box>
+                  <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                    {message.metrics && (
+                      <>
+                        {message.metrics.usage?.total_tokens > 0 && (
+                          <Tooltip
+                            title={
+                              <Box sx={{ p: 1, fontFamily: 'monospace' }}>
+                                  <Box sx={{ color: 'primary.light', mb: 0.5 }}>
+                                    {message.metrics.model || 'Unknown Model'}:
+                                  </Box>
+                                  <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100' }}>
+                                    <span>Prompt:</span>
+                                    <span>{message.metrics.usage.prompt_tokens.toLocaleString()}</span>
+                                  </Box>
+                                  <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100' }}>
+                                    <span>Completion:</span>
+                                    <span>{message.metrics.usage.completion_tokens.toLocaleString()}</span>
+                                  </Box>
+                                  <Divider sx={{ my: 0.5, borderColor: 'rgba(255, 255, 255, 0.2)' }} />
+                                  <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100' }}>
+                                    <span>Total:</span>
+                                    <span>{message.metrics.usage.total_tokens.toLocaleString()}</span>
+                                  </Box>
+                              </Box>
+                            }
+                            arrow
+                            placement="top"
+                          >
+                            <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'default' }}>
+                              <IconPlaystationCircle size={14} />
+                              {message.metrics.usage.total_tokens.toLocaleString()}
+                            </Box>
+                          </Tooltip>
+                        )}
+                        {message.metrics?.timing?.latency > 0 && (
+                          <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            <IconClock size={14} />
+                            {(message.metrics.timing.latency / 1000).toFixed(2)}s
                           </Box>
-                        </Tooltip>
-                      )}
-                      {message.metrics?.timing?.latency > 0 && (
-                        <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                          <IconClock size={14} />
-                          {(message.metrics.timing.latency / 1000).toFixed(2)}s
-                        </Box>
-                      )}
-                    </>
-                  )}
-                  <Box component="span">
-                    {message.timestamp ? formatTimeAgo(message.timestamp) : ''}
+                        )}
+                      </>
+                    )}
+                    <Box component="span">
+                      {message.timestamp ? formatTimeAgo(message.timestamp) : ''}
+                    </Box>
                   </Box>
                 </Box>
               </Box>
