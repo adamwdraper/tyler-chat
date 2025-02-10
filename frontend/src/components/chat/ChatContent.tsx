@@ -822,7 +822,7 @@ const ChatContent: React.FC = () => {
     const isExpanded = expandedMessages.has(message.id);
     const contentHeight = contentHeights.get(message.id) || 0;
     const shouldShowExpand = contentHeight > maxHeight;
-    const isToolRelated = message.role === 'tool' || message.tool_call_id;
+    const isToolRelated = message.role === 'tool' || !!message.tool_call_id;
     const isPlainText = plainTextMessages.has(message.id);
 
     const handleCopyMessage = React.useCallback(async () => {
@@ -1008,7 +1008,7 @@ const ChatContent: React.FC = () => {
                       {message.attachments.map((attachment, index) => {
                         const imageUrl = getImageUrl(attachment.processed_content, attachment.mime_type);
                         
-                        if (attachment.mime_type?.startsWith('image/')) {
+                        if (typeof attachment.mime_type === 'string' && attachment.mime_type.startsWith('image/')) {
                           return (
                             <Box 
                               key={index}
@@ -1292,19 +1292,22 @@ const ChatContent: React.FC = () => {
     if (!selectedAttachment) return null;
 
     const getFileUrl = (attachment: typeof selectedAttachment) => {
-      // If we have a storage path, construct the URL to the actual file
+      const isImage = typeof attachment.mime_type === 'string' && attachment.mime_type.indexOf('image/') === 0;
+      
+      if (isImage) {
+        return getImageUrl(attachment.processed_content, attachment.mime_type);
+      }
+      
+      // For non-image files, use the existing logic
       if (attachment.storage_path) {
         return `/files/${attachment.storage_path}`;
       }
-      // If we have a URL in processed content, use that directly
       if (attachment.processed_content?.url) {
         return attachment.processed_content.url;
       }
-      // If we have content in processed content, use that directly
       if (attachment.processed_content?.content) {
-        return attachment.processed_content.content;
+        return `data:${attachment.mime_type || 'application/octet-stream'};base64,${attachment.processed_content.content}`;
       }
-      // Fallback to base64 content if available
       if (attachment.content) {
         return `data:${attachment.mime_type || 'application/octet-stream'};base64,${attachment.content}`;
       }
