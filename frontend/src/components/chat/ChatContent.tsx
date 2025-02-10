@@ -53,13 +53,6 @@ import { formatTimeAgo } from '@/utils/dateUtils';
 import { useTimeAgoUpdater } from '@/hooks/useTimeAgoUpdater';
 import { useNavigate, useParams } from 'react-router-dom';
 
-// Import new components
-import ChatHeader from './ChatHeader';
-import ChatInput from './ChatInput';
-import MessageContent from './MessageContent';
-import MessageAttachments from './MessageAttachments';
-import FilePreviewModal from './FilePreviewModal';
-
 const dotAnimation = keyframes`
   0%, 20% {
     opacity: 0.2;
@@ -1586,10 +1579,178 @@ const ChatContent: React.FC = () => {
         accept={Array.from(ALLOWED_MIME_TYPES).join(',')}
       />
       {activeThread && (
-        <ChatHeader
-          thread={activeThread}
-          onDeleteThread={handleDeleteThread}
-        />
+        <Box sx={{ 
+          p: 3, 
+          borderBottom: `1px solid ${theme.palette.divider}`,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
+        }}>
+          <Stack direction="row" spacing={3} alignItems="center">
+            <Stack direction="row" spacing={1} alignItems="center">
+              <IconMessage size={20} style={{ color: theme.palette.primary.main }} />
+              <Typography variant="body2">
+                {calculateMetrics().messages}
+              </Typography>
+            </Stack>
+            <Stack direction="row" spacing={1} alignItems="center">
+              <Tooltip
+                title={
+                  <Box sx={{ p: 1, fontFamily: 'monospace' }}>
+                    {activeThread && (() => {
+                      const { tools, total_calls } = calculateToolUsage();
+                      const toolNames = Object.keys(tools);
+                      
+                      return (
+                        <>
+                          <Box sx={{ color: 'primary.light', mb: 0.5 }}>Tool Usage:</Box>
+                          {toolNames.map((toolName) => (
+                            <Box key={toolName} sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100' }}>
+                              <span>{toolName}:</span>
+                              <span>{tools[toolName]}</span>
+                            </Box>
+                          ))}
+                          {toolNames.length > 1 && (
+                            <>
+                              <Divider sx={{ my: 0.5, borderColor: 'rgba(255, 255, 255, 0.2)' }} />
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100' }}>
+                                <span>Total:</span>
+                                <span>{total_calls}</span>
+                              </Box>
+                            </>
+                          )}
+                          {toolNames.length === 0 && (
+                            <Box sx={{ color: 'grey.100' }}>No tools used</Box>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </Box>
+                }
+                arrow
+                placement="top"
+              >
+                <Stack direction="row" spacing={1} alignItems="center" sx={{ cursor: 'default' }}>
+                  <IconTool size={20} style={{ color: theme.palette.secondary.main }} />
+                  <Typography variant="body2">
+                    {calculateMetrics().tools}
+                  </Typography>
+                </Stack>
+              </Tooltip>
+            </Stack>
+            <Stack direction="row" spacing={1} alignItems="center">
+              <Tooltip
+                title={
+                  <Box sx={{ p: 1, fontFamily: 'monospace' }}>
+                    {activeThread && (() => {
+                      const { modelUsage, overall } = calculateTokenUsage();
+                      const modelCount = Object.keys(modelUsage).length;
+                      
+                      return (
+                        <>
+                          <Box sx={{ color: 'primary.light', mb: 0.5 }}>Token Usage by Model:</Box>
+                          {Object.entries(modelUsage || {}).map(([model, usage]) => (
+                            <Box key={model}>
+                              <Box sx={{ color: 'primary.light', mt: 1, mb: 0.5 }}>
+                                {model}:
+                              </Box>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100' }}>
+                                <span>Prompt:</span>
+                                <span>{usage.prompt_tokens.toLocaleString()}</span>
+                              </Box>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100' }}>
+                                <span>Completion:</span>
+                                <span>{usage.completion_tokens.toLocaleString()}</span>
+                              </Box>
+                              <Divider sx={{ my: 0.5, borderColor: 'rgba(255, 255, 255, 0.2)' }} />
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100' }}>
+                                <span>Total:</span>
+                                <span>{usage.total_tokens.toLocaleString()}</span>
+                              </Box>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100', fontSize: '0.85em' }}>
+                                <span>Calls:</span>
+                                <span>{usage.calls}</span>
+                              </Box>
+                              {modelCount > 1 && <Divider sx={{ my: 1 }} />}
+                            </Box>
+                          ))}
+                          {modelCount > 1 && (
+                            <Box sx={{ mt: 1 }}>
+                              <Box sx={{ color: 'primary.light', mb: 0.5 }}>Overall Usage:</Box>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100' }}>
+                                <span>Prompt:</span>
+                                <span>{overall.prompt_tokens.toLocaleString()}</span>
+                              </Box>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100' }}>
+                                <span>Completion:</span>
+                                <span>{overall.completion_tokens.toLocaleString()}</span>
+                              </Box>
+                              <Divider sx={{ my: 0.5, borderColor: 'rgba(255, 255, 255, 0.2)' }} />
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100' }}>
+                                <span>Total:</span>
+                                <span>{overall.total_tokens.toLocaleString()}</span>
+                              </Box>
+                            </Box>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </Box>
+                }
+                arrow
+                placement="top"
+              >
+                <Stack direction="row" spacing={1} alignItems="center" sx={{ cursor: 'default' }}>
+                  <IconPlaystationCircle size={20} style={{ color: theme.palette.warning.main }} />
+                  <Typography variant="body2">
+                    {calculateMetrics().tokens.toLocaleString()}
+                  </Typography>
+                </Stack>
+              </Tooltip>
+            </Stack>
+            <Stack direction="row" spacing={1} alignItems="center">
+              <IconClock size={20} style={{ color: theme.palette.info.main }} />
+              <Typography variant="body2">
+                {(calculateMetrics().totalLatency / 1000).toFixed(1)}s
+              </Typography>
+            </Stack>
+          </Stack>
+          <IconButton 
+            onClick={handleMenuClick}
+            size="small"
+            sx={{
+              color: 'text.secondary',
+              '&:hover': {
+                color: 'text.primary',
+              },
+            }}
+          >
+            <IconDotsVertical size={20} />
+          </IconButton>
+          <Menu
+            anchorEl={anchorEl}
+            open={open}
+            onClose={handleMenuClose}
+            anchorOrigin={{
+              vertical: 'bottom',
+              horizontal: 'right',
+            }}
+            transformOrigin={{
+              vertical: 'top',
+              horizontal: 'right',
+            }}
+          >
+            <MenuItem 
+              onClick={handleDeleteClick}
+              sx={{ 
+                gap: 1
+              }}
+            >
+              <IconTrash size={18} style={{ color: theme.palette.error.main }} />
+              Delete
+            </MenuItem>
+          </Menu>
+        </Box>
       )}
       <Box sx={{ flexGrow: 1, position: 'relative', overflow: 'hidden' }}>
         <Fade in={fadeIn} timeout={300}>
@@ -1630,14 +1791,134 @@ const ChatContent: React.FC = () => {
           </Box>
         </Fade>
       </Box>
-      <ChatInput
-        onSendMessage={handleSendMessage}
-        isProcessing={isProcessing}
-      />
-      <FilePreviewModal
-        attachment={selectedAttachment}
-        onClose={handleCloseModal}
-      />
+
+      <Box sx={{ p: 3, borderTop: `1px solid ${theme.palette.divider}`, bgcolor: 'background.default' }}>
+        {isDragging && (
+          <Box
+            sx={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              bgcolor: 'rgba(0, 0, 0, 0.1)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 1000,
+              border: '2px dashed',
+              borderColor: 'primary.main',
+            }}
+          >
+            <Typography variant="h6" color="primary">
+              Drop files here
+            </Typography>
+          </Box>
+        )}
+        
+        <Stack direction="row" alignItems="flex-end">
+          <Box sx={{ 
+            flexGrow: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 1.5,
+          }}>
+            <Box sx={{ 
+              border: 1,
+              borderColor: 'divider',
+              borderRadius: 1,
+              bgcolor: 'background.paper',
+              '& .MuiOutlinedInput-notchedOutline': {
+                border: 'none'
+              }
+            }}>
+              <TextField
+                fullWidth
+                multiline
+                maxRows={4}
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder="Type your message..."
+                variant="outlined"
+                size="small"
+                disabled={isProcessing}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    border: 'none',
+                    borderRadius: '8px 8px 0 0',
+                    padding: '12px',
+                  }
+                }}
+              />
+              <Box sx={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center',
+                px: 1.5,
+                py: 0.5
+              }}>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <IconButton
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isProcessing}
+                    size="small"
+                    sx={{
+                      color: 'text.secondary',
+                      '&:hover': {
+                        color: 'primary.main',
+                      },
+                    }}
+                  >
+                    <IconPaperclip size={20} />
+                  </IconButton>
+                  {attachments.length > 0 && (
+                    <Stack direction="row" spacing={1} flexWrap="wrap" gap={1}>
+                      {attachments.map((file, index) => (
+                        <Chip
+                          key={index}
+                          label={file.name}
+                          onDelete={() => handleRemoveAttachment(index)}
+                          deleteIcon={<IconX size={14} />}
+                          variant="outlined"
+                          size="small"
+                          sx={{
+                            borderColor: theme => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.23)' : 'rgba(0, 0, 0, 0.23)',
+                            color: 'text.primary',
+                            '& .MuiChip-deleteIcon': {
+                              color: 'text.secondary',
+                              '&:hover': {
+                                color: 'error.main',
+                              },
+                            },
+                          }}
+                        />
+                      ))}
+                    </Stack>
+                  )}
+                </Stack>
+                <IconButton
+                  color="primary"
+                  onClick={handleSendMessage}
+                  disabled={(!newMessage.trim() && attachments.length === 0) || isProcessing}
+                  sx={{
+                    color: 'primary.main',
+                    '&:hover': {
+                      color: 'primary.dark',
+                    },
+                    '&.Mui-disabled': {
+                      color: 'text.disabled',
+                    }
+                  }}
+                >
+                  <IconSend size={18} />
+                </IconButton>
+              </Box>
+            </Box>
+          </Box>
+        </Stack>
+      </Box>
+      <FilePreviewModal />
     </Box>
   );
 };
