@@ -907,6 +907,91 @@ const ChatContent: React.FC = () => {
                     >
                       {renderContent(message.content, message.role, message, [])}
                     </Box>
+                    {message.attachments && message.attachments.length > 0 && (
+                      <Box sx={{ mt: 2 }}>
+                        <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
+                          {message.attachments.map((attachment, index) => {
+                            const imageUrl = getImageUrl(attachment.processed_content, attachment.mime_type);
+                            
+                            if (attachment.mime_type?.startsWith('image/')) {
+                              return (
+                                <Box 
+                                  key={index}
+                                  sx={{ 
+                                    width: '100%',
+                                    overflow: 'hidden',
+                                    borderRadius: 1,
+                                    border: 1,
+                                    borderColor: 'divider',
+                                    p: 2,
+                                    display: 'flex',
+                                    justifyContent: 'center',
+                                    alignItems: 'center',
+                                    cursor: 'pointer'
+                                  }}
+                                  onClick={() => handleAttachmentClick(attachment)}
+                                >
+                                  {imageUrl ? (
+                                    <Box sx={{ 
+                                      height: '100%', 
+                                      display: 'flex', 
+                                      alignItems: 'center', 
+                                      justifyContent: 'center'
+                                    }}>
+                                      <img 
+                                        src={imageUrl}
+                                        alt={attachment.filename}
+                                        style={{ 
+                                          maxWidth: '100%',
+                                          height: 'auto',
+                                          maxHeight: 300,
+                                          display: 'block',
+                                          margin: '0 auto',
+                                          borderRadius: theme.shape.borderRadius
+                                        }}
+                                        onError={(e) => {
+                                          console.error('Image failed to load:', {
+                                            src: imageUrl,
+                                            error: e
+                                          });
+                                        }}
+                                      />
+                                    </Box>
+                                  ) : (
+                                    <Box sx={{ p: 2, textAlign: 'center' }}>
+                                      <Typography variant="body2" color="text.secondary">
+                                        Processing image...
+                                      </Typography>
+                                    </Box>
+                                  )}
+                                </Box>
+                              );
+                            }
+                            
+                            return (
+                              <Chip
+                                key={index}
+                                label={attachment.filename}
+                                variant="outlined"
+                                size="medium"
+                                icon={<IconPaperclip size={16} />}
+                                onClick={() => handleAttachmentClick(attachment)}
+                                sx={{
+                                  cursor: 'pointer',
+                                  '& .MuiChip-label': {
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis'
+                                  },
+                                  '&:hover': {
+                                    bgcolor: 'action.hover'
+                                  }
+                                }}
+                              />
+                            );
+                          })}
+                        </Stack>
+                      </Box>
+                    )}
                     {!isExpanded && shouldShowExpand && (
                       <Box
                         sx={{
@@ -1173,7 +1258,8 @@ const ChatContent: React.FC = () => {
     };
 
     const renderContent = () => {
-      if (!selectedAttachment.storage_path && !selectedAttachment.processed_content && !selectedAttachment.content) {
+      const fileUrl = getFileUrl(selectedAttachment);
+      if (!fileUrl) {
         return (
           <Box sx={{ p: 2, textAlign: 'center' }}>
             <Typography variant="body2" color="text.secondary">
@@ -1183,11 +1269,42 @@ const ChatContent: React.FC = () => {
         );
       }
 
-      const fileUrl = getFileUrl(selectedAttachment);
+      // Handle PDFs and other documents that can be displayed in an iframe
+      if (selectedAttachment.mime_type === 'application/pdf') {
+        return (
+          <Box sx={{ 
+            width: '100%',
+            height: '100%',
+            overflow: 'hidden',
+            bgcolor: 'background.paper',
+            borderRadius: 'inherit'
+          }}>
+            <object
+              data={fileUrl}
+              type="application/pdf"
+              style={{
+                width: '100%',
+                height: '100%',
+                border: 'none',
+              }}
+            >
+              <iframe
+                src={fileUrl}
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  border: 'none',
+                }}
+                title={selectedAttachment.filename}
+              />
+            </object>
+          </Box>
+        );
+      }
 
       // Handle images
       if (selectedAttachment.mime_type?.startsWith('image/')) {
-        return fileUrl ? (
+        return (
           <Box sx={{ 
             height: '100%', 
             display: 'flex', 
@@ -1212,51 +1329,7 @@ const ChatContent: React.FC = () => {
               }}
             />
           </Box>
-        ) : (
-          <Typography variant="body2" color="text.secondary">
-            Unable to load image
-          </Typography>
         );
-      }
-
-      // Handle PDFs and other documents that can be displayed in an iframe
-      if (selectedAttachment.mime_type === 'application/pdf') {
-        if (fileUrl) {
-          return (
-            <Box sx={{ 
-              width: '100%',
-              height: '100%',
-              overflow: 'hidden',
-              bgcolor: 'background.paper',
-              borderRadius: 'inherit'
-            }}>
-              <object
-                data={fileUrl}
-                type="application/pdf"
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  border: 'none'
-                }}
-              >
-                <Box sx={{ p: 2, textAlign: 'center' }}>
-                  <Typography variant="body2" color="text.secondary" gutterBottom>
-                    Unable to display PDF directly.
-                  </Typography>
-                  <Button
-                    variant="contained"
-                    color="primary"
-                    href={fileUrl}
-                    download={selectedAttachment.filename}
-                    startIcon={<IconPaperclip size={20} />}
-                  >
-                    Download PDF
-                  </Button>
-                </Box>
-              </object>
-            </Box>
-          );
-        }
       }
 
       // Handle text files
@@ -1265,119 +1338,71 @@ const ChatContent: React.FC = () => {
         selectedAttachment.mime_type === 'text/csv' ||
         selectedAttachment.mime_type === 'application/json'
       ) {
-        if (fileUrl) {
-          // For text files, fetch and display content directly
-          const [content, setContent] = useState<string | null>(null);
-          const [error, setError] = useState<string | null>(null);
+        // For text files, fetch and display content directly
+        const [content, setContent] = useState<string | null>(null);
+        const [error, setError] = useState<string | null>(null);
 
-          useEffect(() => {
-            fetch(fileUrl)
-              .then(response => response.text())
-              .then(text => setContent(text))
-              .catch(err => {
-                console.error('Error fetching text content:', err);
-                setError('Failed to load file content');
-              });
-          }, [fileUrl]);
+        useEffect(() => {
+          fetch(fileUrl)
+            .then(response => response.text())
+            .then(text => setContent(text))
+            .catch(err => {
+              console.error('Error fetching text content:', err);
+              setError('Failed to load file content');
+            });
+        }, [fileUrl]);
 
-          if (error) {
-            return (
-              <Alert severity="error" sx={{ mt: 2 }}>
-                {error}
-              </Alert>
-            );
-          }
-
-          if (!content) {
-            return (
-              <Box sx={{ p: 2, textAlign: 'center' }}>
-                <CircularProgress size={24} />
-              </Box>
-            );
-          }
-
+        if (error) {
           return (
-            <Box sx={{ 
-              p: 3,
-              height: '100%',
-              bgcolor: theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
-              borderRadius: 'inherit',
-              overflow: 'auto'
-            }}>
-              <pre style={{ 
-                margin: 0,
-                fontFamily: 'monospace',
-                fontSize: '0.875rem',
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-word'
-              }}>
-                {content}
-              </pre>
+            <Alert severity="error" sx={{ mt: 2 }}>
+              {error}
+            </Alert>
+          );
+        }
+
+        if (!content) {
+          return (
+            <Box sx={{ p: 2, textAlign: 'center' }}>
+              <CircularProgress size={24} />
             </Box>
           );
         }
-      }
-      
-      // For all other files or when direct viewing is not possible
-      return (
-        <Stack spacing={2}>
-          {fileUrl && (
-            <Box sx={{ textAlign: 'center' }}>
-              <Button
-                variant="contained"
-                color="primary"
-                href={fileUrl}
-                download={selectedAttachment.filename}
-                startIcon={<IconPaperclip size={20} />}
-              >
-                Download {selectedAttachment.filename}
-              </Button>
-            </Box>
-          )}
-          
-          {/* Show processed content if available */}
-          {selectedAttachment.processed_content?.overview && (
-            <Box>
-              <Typography variant="subtitle2" color="text.secondary">Overview</Typography>
-              <Typography variant="body2">{selectedAttachment.processed_content.overview}</Typography>
-            </Box>
-          )}
-          
-          {selectedAttachment.processed_content?.text && (
-            <Box sx={{ 
-              p: 3,
-              bgcolor: theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
-              borderRadius: 1,
+
+        return (
+          <Box sx={{ 
+            p: 3,
+            height: '100%',
+            bgcolor: theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
+            borderRadius: 'inherit',
+            overflow: 'auto'
+          }}>
+            <pre style={{ 
+              margin: 0,
               fontFamily: 'monospace',
               fontSize: '0.875rem',
               whiteSpace: 'pre-wrap',
               wordBreak: 'break-word'
             }}>
-              {selectedAttachment.processed_content.text}
-            </Box>
-          )}
-          
-          {selectedAttachment.processed_content?.analysis && (
-            <Box>
-              <Typography variant="subtitle2" color="text.secondary">Analysis</Typography>
-              <Stack spacing={1}>
-                {selectedAttachment.processed_content.analysis.objects && (
-                  <Typography variant="body2">
-                    Objects detected: {selectedAttachment.processed_content.analysis.objects.join(', ')}
-                  </Typography>
-                )}
-                {selectedAttachment.processed_content.analysis.text_detected && (
-                  <Typography variant="body2">Text detected in file</Typography>
-                )}
-              </Stack>
-            </Box>
-          )}
-
-          {selectedAttachment.processed_content?.error && (
-            <Alert severity="error">
-              {selectedAttachment.processed_content.error}
-            </Alert>
-          )}
+              {content}
+            </pre>
+          </Box>
+        );
+      }
+      
+      // For all other files or when direct viewing is not possible
+      return (
+        <Stack spacing={2}>
+          <Box sx={{ textAlign: 'center' }}>
+            <Button
+              variant="contained"
+              color="primary"
+              href={fileUrl}
+              download={selectedAttachment.filename}
+              startIcon={<IconPaperclip size={20} />}
+            >
+              Download {selectedAttachment.filename}
+            </Button>
+          </Box>
         </Stack>
       );
     };
@@ -1491,6 +1516,14 @@ const ChatContent: React.FC = () => {
       ref={dropZoneRef}
       id="chat-content-container"
     >
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileSelect}
+        style={{ display: 'none' }}
+        multiple
+        accept={Array.from(ALLOWED_MIME_TYPES).join(',')}
+      />
       {activeThread && (
         <Box sx={{ 
           p: 3, 
@@ -1730,13 +1763,6 @@ const ChatContent: React.FC = () => {
         )}
         
         <Stack direction="row" alignItems="flex-end">
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileSelect}
-            style={{ display: 'none' }}
-            multiple
-          />
           <Box sx={{ 
             flexGrow: 1,
             display: 'flex',
@@ -1802,6 +1828,16 @@ const ChatContent: React.FC = () => {
                           deleteIcon={<IconX size={14} />}
                           variant="outlined"
                           size="small"
+                          sx={{
+                            borderColor: theme => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.23)' : 'rgba(0, 0, 0, 0.23)',
+                            color: 'text.primary',
+                            '& .MuiChip-deleteIcon': {
+                              color: 'text.secondary',
+                              '&:hover': {
+                                color: 'error.main',
+                              },
+                            },
+                          }}
                         />
                       ))}
                     </Stack>
