@@ -73,7 +73,26 @@ const ThreadListItem: React.FC<Props> = ({ thread, isSelected, onClick }) => {
       sx={{ 
         mb: 1, 
         py: 2,
+        px: 2,
         borderRadius: (theme) => `${theme.shape.borderRadius}px`,
+        transition: (theme) => theme.transitions.create(['background-color', 'box-shadow'], {
+          duration: theme.transitions.duration.shorter,
+        }),
+        '&:hover': {
+          backgroundColor: theme => theme.palette.mode === 'dark' 
+            ? 'rgba(255, 255, 255, 0.05)' 
+            : 'rgba(0, 0, 0, 0.04)',
+        },
+        '&.Mui-selected': {
+          backgroundColor: theme => theme.palette.mode === 'dark' 
+            ? 'rgba(93, 135, 255, 0.1)' 
+            : 'rgba(93, 135, 255, 0.08)',
+          '&:hover': {
+            backgroundColor: theme => theme.palette.mode === 'dark' 
+              ? 'rgba(93, 135, 255, 0.15)' 
+              : 'rgba(93, 135, 255, 0.12)',
+          },
+        },
       }} 
       selected={isSelected}
       onClick={onClick}
@@ -90,7 +109,10 @@ const ThreadListItem: React.FC<Props> = ({ thread, isSelected, onClick }) => {
               variant="subtitle2" 
               fontWeight={600} 
               sx={{
-                visibility: isNewTitle ? 'hidden' : 'visible'
+                visibility: isNewTitle ? 'hidden' : 'visible',
+                color: theme => isSelected 
+                  ? theme.palette.primary.main 
+                  : theme.palette.text.primary,
               }}
             >
               {thread.title || 'New Chat'}
@@ -104,13 +126,22 @@ const ThreadListItem: React.FC<Props> = ({ thread, isSelected, onClick }) => {
                   left: 0,
                   top: 0,
                   animation: `${titleTypingAnimation} 2s steps(${displayTitle?.length || 8}, end)`,
+                  color: theme => isSelected 
+                    ? theme.palette.primary.main 
+                    : theme.palette.text.primary,
                 }}
               >
                 {displayTitle}
               </Typography>
             )}
           </Box>
-          <Typography variant="caption" color="textSecondary">
+          <Typography 
+            variant="caption" 
+            color="textSecondary"
+            sx={{
+              minWidth: 'fit-content',
+            }}
+          >
             {timeAgo}
           </Typography>
         </Stack>
@@ -124,6 +155,8 @@ const ThreadListItem: React.FC<Props> = ({ thread, isSelected, onClick }) => {
               display: '-webkit-box',
               WebkitLineClamp: 2,
               WebkitBoxOrient: 'vertical',
+              lineHeight: '1.4',
+              fontSize: '0.875rem',
             }}
           >
             {getMessageContent(lastMessage.content)}

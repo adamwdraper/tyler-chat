@@ -21,6 +21,7 @@ import {
   Alert,
   Menu,
   MenuItem,
+  Link,
 } from '@mui/material';
 import { 
   IconSend, 
@@ -44,13 +45,14 @@ import {
   IconDotsVertical,
 } from '@tabler/icons-react';
 import { useSelector } from 'react-redux';
-import { addMessage, processThread, createThread, updateThread, deleteThread } from '@/store/chat/ChatSlice';
+import { addMessage, processThread, createThread, updateThread, deleteThread, setCurrentThread } from '@/store/chat/ChatSlice';
 import { RootState } from '@/store/Store';
 import { Message, Thread, ToolCall, TextContent, ImageContent, MessageCreate, MessageAttachment } from '@/types/chat';
 import Scrollbar from '@/components/custom-scroll/Scrollbar';
 import { useAppDispatch } from '@/hooks/useAppDispatch';
 import { formatTimeAgo } from '@/utils/dateUtils';
 import { useTimeAgoUpdater } from '@/hooks/useTimeAgoUpdater';
+import { useNavigate, useParams } from 'react-router-dom';
 
 const dotAnimation = keyframes`
   0%, 20% {
@@ -107,6 +109,8 @@ const TypingDots: React.FC = () => {
 const ChatContent: React.FC = () => {
   const theme = useTheme();
   const dispatch = useAppDispatch();
+  const navigate = useNavigate();
+  const { threadId } = useParams<{ threadId: string }>();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [newMessage, setNewMessage] = React.useState('');
   const [isProcessing, setIsProcessing] = React.useState(false);
@@ -114,6 +118,7 @@ const ChatContent: React.FC = () => {
   const [contentHeights, setContentHeights] = React.useState<Map<string, number>>(new Map());
   const [isNewTitle, setIsNewTitle] = React.useState(false);
   const [fadeIn, setFadeIn] = React.useState(true);
+  const [expandedSystemMessages, setExpandedSystemMessages] = React.useState<Set<string>>(new Set());
   const contentRefs = React.useRef<Map<string, HTMLDivElement>>(new Map());
   const [hoveredMessageId, setHoveredMessageId] = React.useState<string | null>(null);
   const maxHeight = 300; // About 15 lines of text
@@ -131,6 +136,20 @@ const ChatContent: React.FC = () => {
   
   const { threads, currentThread } = useSelector((state: RootState) => state.chat);
   const activeThread = threads.find((t: Thread) => t.id === currentThread);
+
+  // Only sync from URL to Redux when there's a thread ID
+  useEffect(() => {
+    if (threadId) {
+      dispatch(setCurrentThread(threadId));
+    }
+  }, [threadId, dispatch]);
+
+  // Only sync from Redux to URL when there's a thread
+  useEffect(() => {
+    if (currentThread && window.location.pathname === '/') {
+      navigate(`/thread/${currentThread}`, { replace: true });
+    }
+  }, [currentThread, navigate]);
 
   // Use the custom hook for periodic updates
   const updateTimestamps = useCallback(() => {
@@ -327,6 +346,7 @@ const ChatContent: React.FC = () => {
     if (!threadId) {
       const newThread = await dispatch(createThread({ title: 'New Chat' })).unwrap();
       threadId = newThread.id;
+      navigate(`/thread/${threadId}`, { replace: true });
     }
 
     if (!threadId) return;
@@ -501,10 +521,15 @@ const ChatContent: React.FC = () => {
       >
         {functionName ? (
           <>
-            <Box component="span" sx={{ color: 'primary.main', fontWeight: 600 }}>
-              {functionName}
-            </Box>
-            {'\n\n'}
+            <Stack spacing={0.5}>
+              <Box component="span" sx={{ color: 'text.secondary', fontSize: '0.75rem', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 1 }}>
+                <IconTool size={14} />
+                Result
+              </Box>
+              <Box component="span" sx={{ color: 'secondary.main', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
+                {functionName}
+              </Box>
+            </Stack>
             {JSON.stringify(data, null, 2)}
           </>
         ) : (
@@ -523,6 +548,28 @@ const ChatContent: React.FC = () => {
             <Typography variant="body1" component="p">
               {children}
             </Typography>
+          ),
+          a: ({ href, children }) => (
+            <Link
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              sx={{
+                color: 'primary.main',
+                textDecoration: 'none',
+                fontWeight: 500,
+                '&:hover': {
+                  color: 'primary.dark',
+                  textDecoration: 'underline',
+                },
+                '&:visited': {
+                  color: 'secondary.main',
+                },
+                transition: 'color 0.2s ease-in-out',
+              }}
+            >
+              {children}
+            </Link>
           ),
         }}
       >
@@ -546,7 +593,12 @@ const ChatContent: React.FC = () => {
   const renderContent = (content: string | (TextContent | ImageContent)[], role: string, message: Message, messages: Message[]) => {
     if (typeof content === 'string') {
       if (role === 'tool') {
-        return renderFormattedCode(content, message.name);
+        try {
+          const parsedContent = JSON.parse(content);
+          return renderFormattedCode(parsedContent, message.name);
+        } catch {
+          return renderFormattedCode(content, message.name);
+        }
       }
       const isPlainText = plainTextMessages.has(message.id);
       return isPlainText ? (
@@ -669,23 +721,21 @@ const ChatContent: React.FC = () => {
       {metrics?.usage?.total_tokens > 0 && (
         <Tooltip
           title={
-            <Box sx={{ p: 1, fontFamily: 'monospace' }}>
-                <Box sx={{ color: 'primary.light', mb: 0.5 }}>
-                  {metrics.model || 'Unknown Model'}:
-                </Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100' }}>
-                  <span>Prompt:</span>
-                  <span>{metrics.usage.prompt_tokens.toLocaleString()}</span>
-                </Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100' }}>
-                  <span>Completion:</span>
-                  <span>{metrics.usage.completion_tokens.toLocaleString()}</span>
-                </Box>
-                <Divider sx={{ my: 0.5, borderColor: 'rgba(255, 255, 255, 0.2)' }} />
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100' }}>
-                  <span>Total:</span>
-                  <span>{metrics.usage.total_tokens.toLocaleString()}</span>
-                </Box>
+            <Box sx={{ p: 1, fontFamily: 'monospace', color: 'common.white' }}>
+              {metrics.model || 'Unknown Model'}:
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+                <span>Prompt:</span>
+                <span>{metrics.usage.prompt_tokens.toLocaleString()}</span>
+              </Box>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+                <span>Completion:</span>
+                <span>{metrics.usage.completion_tokens.toLocaleString()}</span>
+              </Box>
+              <Divider sx={{ my: 0.5, borderColor: 'rgba(255, 255, 255, 0.2)' }} />
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+                <span>Total:</span>
+                <span>{metrics.usage.total_tokens.toLocaleString()}</span>
+              </Box>
             </Box>
           }
           arrow
@@ -776,6 +826,9 @@ const ChatContent: React.FC = () => {
     contentRefs,
     maxHeight,
     plainTextMessages,
+    messages,
+    toggleSystemMessage,
+    expandedSystemMessages,
   }: {
     message: Message;
     isLastMessage: boolean;
@@ -786,14 +839,19 @@ const ChatContent: React.FC = () => {
     contentRefs: React.MutableRefObject<Map<string, HTMLDivElement>>;
     maxHeight: number;
     plainTextMessages: Set<string>;
+    messages: Message[];
+    toggleSystemMessage: (messageId: string) => void;
+    expandedSystemMessages: Set<string>;
   }) => {
     const [isHovered, setIsHovered] = React.useState(false);
     const [isCopied, setIsCopied] = React.useState(false);
     const isExpanded = expandedMessages.has(message.id);
     const contentHeight = contentHeights.get(message.id) || 0;
     const shouldShowExpand = contentHeight > maxHeight;
-    const isToolRelated = message.role === 'tool' || message.tool_call_id;
+    const isToolRelated = message.role === 'tool' || !!message.tool_call_id;
     const isPlainText = plainTextMessages.has(message.id);
+    const isSystemMessage = message.role === 'system';
+    const isSystemExpanded = expandedSystemMessages.has(message.id);
 
     const handleCopyMessage = React.useCallback(async () => {
       let textToCopy = '';
@@ -821,6 +879,52 @@ const ChatContent: React.FC = () => {
       }
     }, [message.id, contentRefs]);
 
+    // Special render for collapsed system message
+    if (isSystemMessage && !isSystemExpanded) {
+      return (
+        <Box 
+          onClick={() => toggleSystemMessage(message.id)}
+          sx={{ 
+            cursor: 'pointer',
+            '&:hover': {
+              bgcolor: 'action.hover'
+            }
+          }}
+        >
+          <Box p={3} sx={{ display: 'flex', justifyContent: 'center' }}>
+            <Box sx={{ width: '100%', maxWidth: 900 }}>
+              <Stack direction="row" gap="16px" alignItems="center">
+                <Avatar
+                  sx={{
+                    bgcolor: getMessageColor('system'),
+                    width: 40,
+                    height: 40,
+                    color: 'white'
+                  }}
+                >
+                  <IconCode size={24} />
+                </Avatar>
+                <Stack 
+                  direction="row" 
+                  alignItems="center" 
+                  sx={{ 
+                    flex: 1,
+                    justifyContent: 'space-between'
+                  }}
+                >
+                  <Typography variant="body2" color="text.secondary">
+                    System Message
+                  </Typography>
+                  <IconChevronDown size={16} style={{ color: theme.palette.text.secondary }} />
+                </Stack>
+              </Stack>
+            </Box>
+          </Box>
+          {!isLastMessage && <Divider />}
+        </Box>
+      );
+    }
+
     return (
       <Box 
         onMouseEnter={() => setIsHovered(true)}
@@ -841,94 +945,241 @@ const ChatContent: React.FC = () => {
                 {getMessageIcon(message.role)}
               </Avatar>
               <Box sx={{ flex: 1, mt: '10px' }}>
-                {message.content && (
-                  <Box
-                    sx={{
-                      position: 'relative',
-                      maxHeight: isExpanded ? 'none' : maxHeight,
-                      overflow: 'hidden'
+                {isSystemMessage && (
+                  <Stack 
+                    direction="row" 
+                    alignItems="center" 
+                    sx={{ 
+                      mb: 1, 
+                      cursor: 'pointer',
+                      color: 'text.secondary',
+                      justifyContent: 'space-between',
+                      '&:hover': {
+                        color: 'text.primary'
+                      }
                     }}
+                    onClick={() => toggleSystemMessage(message.id)}
                   >
+                    <Typography variant="body2">
+                      System Message
+                    </Typography>
+                    <IconChevronUp size={16} />
+                  </Stack>
+                )}
+                {message.content && (
+                  <>
                     <Box
-                      ref={setContentRef}
                       sx={{
-                        '& p': { 
-                          m: 0, 
-                          lineHeight: 1.5 
-                        },
-                        '& p + p': { 
-                          mt: 1.5 
-                        },
-                        '& pre': {
-                          m: 0,
-                          p: 2,
-                          borderRadius: 1,
-                          bgcolor: theme => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
-                          border: 1,
-                          borderColor: theme => theme.palette.mode === 'dark' ? 'grey.700' : 'grey.200',
-                          fontFamily: 'monospace',
-                          fontSize: '0.875rem',
-                          overflow: 'auto',
-                          whiteSpace: 'pre-wrap',
-                          wordWrap: 'break-word',
-                        },
-                        '& code': {
-                          fontFamily: 'monospace',
-                          fontSize: '0.875rem',
-                          p: 0.5,
-                          borderRadius: 0.5,
-                          bgcolor: theme => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
-                          color: theme => theme.palette.mode === 'dark' ? '#ce9178' : '#a31515',
-                        },
-                        '& pre code': {
-                          p: 0,
-                          bgcolor: 'transparent',
-                          color: 'text.primary',
-                        },
+                        position: 'relative',
+                        maxHeight: isSystemMessage ? 'none' : (isExpanded ? 'none' : maxHeight),
+                        overflow: 'hidden'
                       }}
                     >
-                      {renderContent(message.content, message.role, message, [])}
-                    </Box>
-                    {!isExpanded && shouldShowExpand && (
                       <Box
+                        ref={setContentRef}
                         sx={{
-                          position: 'absolute',
-                          bottom: 0,
-                          left: 0,
-                          right: 0,
-                          height: '110px',
-                          background: theme => theme.palette.mode === 'dark' 
-                            ? 'linear-gradient(180deg, transparent 0%, rgba(33,33,33,0.8) 50%, rgba(33,33,33,0.95) 100%)'
-                            : 'linear-gradient(180deg, transparent 0%, rgba(255,255,255,0.8) 50%, rgba(255,255,255,0.95) 100%)',
-                          display: 'flex',
-                          alignItems: 'flex-end',
-                          justifyContent: 'center',
-                          pt: 4
+                          '& p': { 
+                            m: 0, 
+                            lineHeight: 1.5 
+                          },
+                          '& p + p': { 
+                            mt: 1.5 
+                          },
+                          '& pre': {
+                            m: 0,
+                            p: 2,
+                            borderRadius: 1,
+                            bgcolor: theme => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
+                            border: 1,
+                            borderColor: theme => theme.palette.mode === 'dark' ? 'grey.700' : 'grey.200',
+                            fontFamily: 'monospace',
+                            fontSize: '0.875rem',
+                            overflow: 'auto',
+                            whiteSpace: 'pre-wrap',
+                            wordWrap: 'break-word',
+                          },
+                          '& code': {
+                            fontFamily: 'monospace',
+                            fontSize: '0.875rem',
+                            p: 0.5,
+                            borderRadius: 0.5,
+                            bgcolor: theme => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
+                            color: theme => theme.palette.mode === 'dark' ? '#ce9178' : '#a31515',
+                          },
+                          '& pre code': {
+                            p: 0,
+                            bgcolor: 'transparent',
+                            color: 'text.primary',
+                          },
                         }}
                       >
+                        {renderContent(message.content, message.role, message, messages)}
+                      </Box>
+                      {!isSystemMessage && !isExpanded && shouldShowExpand && (
+                        <Box
+                          sx={{
+                            position: 'absolute',
+                            bottom: 0,
+                            left: 0,
+                            right: 0,
+                            height: '110px',
+                            background: theme => theme.palette.mode === 'dark' 
+                              ? 'linear-gradient(180deg, transparent 0%, rgba(33,33,33,0.8) 50%, rgba(33,33,33,0.95) 100%)'
+                              : 'linear-gradient(180deg, transparent 0%, rgba(255,255,255,0.8) 50%, rgba(255,255,255,0.95) 100%)',
+                            display: 'flex',
+                            alignItems: 'flex-end',
+                            justifyContent: 'center',
+                            pt: 4
+                          }}
+                        >
+                          <Button
+                            size="small"
+                            variant="text"
+                            onClick={() => toggleMessageExpand(message.id)}
+                            startIcon={<IconChevronDown size={16} />}
+                            sx={{ mb: 1 }}
+                          >
+                            More
+                          </Button>
+                        </Box>
+                      )}
+                    </Box>
+                    {!isSystemMessage && isExpanded && shouldShowExpand && (
+                      <Box sx={{ textAlign: 'center', mt: 1 }}>
                         <Button
                           size="small"
                           variant="text"
                           onClick={() => toggleMessageExpand(message.id)}
-                          startIcon={<IconChevronDown size={16} />}
-                          sx={{ mb: 1 }}
+                          startIcon={<IconChevronUp size={16} />}
                         >
-                          More
+                          Less
                         </Button>
                       </Box>
                     )}
+                  </>
+                )}
+
+                {/* Render tool calls if present */}
+                {message.tool_calls && message.tool_calls.length > 0 && (
+                  <Box sx={{ mt: 2 }}>
+                    <Stack spacing={2}>
+                      {message.tool_calls.map((toolCall) => (
+                        <Paper
+                          key={toolCall.id}
+                          variant="outlined"
+                          sx={{
+                            bgcolor: theme => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
+                            fontFamily: 'monospace',
+                            overflow: 'hidden',
+                            fontSize: '0.875rem',
+                            whiteSpace: 'pre-wrap',
+                            wordWrap: 'break-word',
+                            width: '100%',
+                            wordBreak: 'break-word',
+                            color: 'text.secondary',
+                            p: 2,
+                          }}
+                        >
+                          <Stack spacing={0.5}>
+                            <Box component="span" sx={{ color: 'text.secondary', fontSize: '0.75rem', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <IconTool size={14} />
+                              Call
+                            </Box>
+                            <Box component="span" sx={{ color: 'secondary.main', fontWeight: 600 }}>
+                              {toolCall.function.name}
+                            </Box>
+                          </Stack>
+                          {JSON.stringify(JSON.parse(toolCall.function.arguments), null, 2)}
+                        </Paper>
+                      ))}
+                    </Stack>
                   </Box>
                 )}
-                {isExpanded && shouldShowExpand && (
-                  <Box sx={{ textAlign: 'center', mt: 1 }}>
-                    <Button
-                      size="small"
-                      variant="text"
-                      onClick={() => toggleMessageExpand(message.id)}
-                      startIcon={<IconChevronUp size={16} />}
-                    >
-                      Less
-                    </Button>
+
+                {/* Attachments section - outside of height restriction */}
+                {message.attachments && message.attachments.length > 0 && (
+                  <Box sx={{ mt: 2 }}>
+                    <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
+                      {message.attachments.map((attachment, index) => {
+                        const imageUrl = getImageUrl(attachment.processed_content, attachment.mime_type);
+                        
+                        if (typeof attachment.mime_type === 'string' && attachment.mime_type.startsWith('image/')) {
+                          return (
+                            <Box 
+                              key={index}
+                              sx={{ 
+                                width: '100%',
+                                overflow: 'hidden',
+                                borderRadius: 1,
+                                border: 1,
+                                borderColor: 'divider',
+                                p: 2,
+                                display: 'flex',
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                                cursor: 'pointer'
+                              }}
+                              onClick={() => handleAttachmentClick(attachment)}
+                            >
+                              {imageUrl ? (
+                                <Box sx={{ 
+                                  height: '100%', 
+                                  display: 'flex', 
+                                  alignItems: 'center', 
+                                  justifyContent: 'center'
+                                }}>
+                                  <img 
+                                    src={imageUrl}
+                                    alt={attachment.filename}
+                                    style={{ 
+                                      maxWidth: '100%',
+                                      height: 'auto',
+                                      maxHeight: 300,
+                                      display: 'block',
+                                      margin: '0 auto',
+                                      borderRadius: theme.shape.borderRadius
+                                    }}
+                                    onError={(e) => {
+                                      console.error('Image failed to load:', {
+                                        src: imageUrl,
+                                        error: e
+                                      });
+                                    }}
+                                  />
+                                </Box>
+                              ) : (
+                                <Box sx={{ p: 2, textAlign: 'center' }}>
+                                  <Typography variant="body2" color="text.secondary">
+                                    Processing image...
+                                  </Typography>
+                                </Box>
+                              )}
+                            </Box>
+                          );
+                        }
+                        
+                        return (
+                          <Chip
+                            key={index}
+                            label={attachment.filename}
+                            variant="outlined"
+                            size="medium"
+                            icon={<IconPaperclip size={16} />}
+                            onClick={() => handleAttachmentClick(attachment)}
+                            sx={{
+                              cursor: 'pointer',
+                              '& .MuiChip-label': {
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis'
+                              },
+                              '&:hover': {
+                                bgcolor: 'action.hover'
+                              }
+                            }}
+                          />
+                        );
+                      })}
+                    </Stack>
                   </Box>
                 )}
 
@@ -979,13 +1230,14 @@ const ChatContent: React.FC = () => {
       </Box>
     );
   }, (prevProps, nextProps) => {
-    // Custom comparison function for React.memo
     return (
       prevProps.message.id === nextProps.message.id &&
       prevProps.isLastMessage === nextProps.isLastMessage &&
       prevProps.expandedMessages.has(prevProps.message.id) === nextProps.expandedMessages.has(nextProps.message.id) &&
       prevProps.contentHeights.get(prevProps.message.id) === nextProps.contentHeights.get(nextProps.message.id) &&
-      prevProps.plainTextMessages.has(prevProps.message.id) === nextProps.plainTextMessages.has(nextProps.message.id)
+      prevProps.plainTextMessages.has(prevProps.message.id) === nextProps.plainTextMessages.has(nextProps.message.id) &&
+      prevProps.expandedSystemMessages.has(prevProps.message.id) === nextProps.expandedSystemMessages.has(nextProps.message.id) &&
+      prevProps.toggleSystemMessage === nextProps.toggleSystemMessage
     );
   });
 
@@ -1007,6 +1259,9 @@ const ChatContent: React.FC = () => {
         contentRefs={contentRefs}
         maxHeight={maxHeight}
         plainTextMessages={plainTextMessages}
+        messages={messages}
+        toggleSystemMessage={toggleSystemMessage}
+        expandedSystemMessages={expandedSystemMessages}
       />
     );
   };
@@ -1135,19 +1390,22 @@ const ChatContent: React.FC = () => {
     if (!selectedAttachment) return null;
 
     const getFileUrl = (attachment: typeof selectedAttachment) => {
-      // If we have a storage path, construct the URL to the actual file
+      const isImage = typeof attachment.mime_type === 'string' && attachment.mime_type.indexOf('image/') === 0;
+      
+      if (isImage) {
+        return getImageUrl(attachment.processed_content, attachment.mime_type);
+      }
+      
+      // For non-image files, use the existing logic
       if (attachment.storage_path) {
         return `/files/${attachment.storage_path}`;
       }
-      // If we have a URL in processed content, use that directly
       if (attachment.processed_content?.url) {
         return attachment.processed_content.url;
       }
-      // If we have content in processed content, use that directly
       if (attachment.processed_content?.content) {
-        return attachment.processed_content.content;
+        return `data:${attachment.mime_type || 'application/octet-stream'};base64,${attachment.processed_content.content}`;
       }
-      // Fallback to base64 content if available
       if (attachment.content) {
         return `data:${attachment.mime_type || 'application/octet-stream'};base64,${attachment.content}`;
       }
@@ -1155,7 +1413,8 @@ const ChatContent: React.FC = () => {
     };
 
     const renderContent = () => {
-      if (!selectedAttachment.storage_path && !selectedAttachment.processed_content && !selectedAttachment.content) {
+      const fileUrl = getFileUrl(selectedAttachment);
+      if (!fileUrl) {
         return (
           <Box sx={{ p: 2, textAlign: 'center' }}>
             <Typography variant="body2" color="text.secondary">
@@ -1165,11 +1424,42 @@ const ChatContent: React.FC = () => {
         );
       }
 
-      const fileUrl = getFileUrl(selectedAttachment);
+      // Handle PDFs and other documents that can be displayed in an iframe
+      if (selectedAttachment.mime_type === 'application/pdf') {
+        return (
+          <Box sx={{ 
+            width: '100%',
+            height: '100%',
+            overflow: 'hidden',
+            bgcolor: 'background.paper',
+            borderRadius: 'inherit'
+          }}>
+            <object
+              data={fileUrl}
+              type="application/pdf"
+              style={{
+                width: '100%',
+                height: '100%',
+                border: 'none',
+              }}
+            >
+              <iframe
+                src={fileUrl}
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  border: 'none',
+                }}
+                title={selectedAttachment.filename}
+              />
+            </object>
+          </Box>
+        );
+      }
 
       // Handle images
       if (selectedAttachment.mime_type?.startsWith('image/')) {
-        return fileUrl ? (
+        return (
           <Box sx={{ 
             height: '100%', 
             display: 'flex', 
@@ -1194,51 +1484,7 @@ const ChatContent: React.FC = () => {
               }}
             />
           </Box>
-        ) : (
-          <Typography variant="body2" color="text.secondary">
-            Unable to load image
-          </Typography>
         );
-      }
-
-      // Handle PDFs and other documents that can be displayed in an iframe
-      if (selectedAttachment.mime_type === 'application/pdf') {
-        if (fileUrl) {
-          return (
-            <Box sx={{ 
-              width: '100%',
-              height: '100%',
-              overflow: 'hidden',
-              bgcolor: 'background.paper',
-              borderRadius: 'inherit'
-            }}>
-              <object
-                data={fileUrl}
-                type="application/pdf"
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  border: 'none'
-                }}
-              >
-                <Box sx={{ p: 2, textAlign: 'center' }}>
-                  <Typography variant="body2" color="text.secondary" gutterBottom>
-                    Unable to display PDF directly.
-                  </Typography>
-                  <Button
-                    variant="contained"
-                    color="primary"
-                    href={fileUrl}
-                    download={selectedAttachment.filename}
-                    startIcon={<IconPaperclip size={20} />}
-                  >
-                    Download PDF
-                  </Button>
-                </Box>
-              </object>
-            </Box>
-          );
-        }
       }
 
       // Handle text files
@@ -1247,119 +1493,71 @@ const ChatContent: React.FC = () => {
         selectedAttachment.mime_type === 'text/csv' ||
         selectedAttachment.mime_type === 'application/json'
       ) {
-        if (fileUrl) {
-          // For text files, fetch and display content directly
-          const [content, setContent] = useState<string | null>(null);
-          const [error, setError] = useState<string | null>(null);
+        // For text files, fetch and display content directly
+        const [content, setContent] = useState<string | null>(null);
+        const [error, setError] = useState<string | null>(null);
 
-          useEffect(() => {
-            fetch(fileUrl)
-              .then(response => response.text())
-              .then(text => setContent(text))
-              .catch(err => {
-                console.error('Error fetching text content:', err);
-                setError('Failed to load file content');
-              });
-          }, [fileUrl]);
+        useEffect(() => {
+          fetch(fileUrl)
+            .then(response => response.text())
+            .then(text => setContent(text))
+            .catch(err => {
+              console.error('Error fetching text content:', err);
+              setError('Failed to load file content');
+            });
+        }, [fileUrl]);
 
-          if (error) {
-            return (
-              <Alert severity="error" sx={{ mt: 2 }}>
-                {error}
-              </Alert>
-            );
-          }
-
-          if (!content) {
-            return (
-              <Box sx={{ p: 2, textAlign: 'center' }}>
-                <CircularProgress size={24} />
-              </Box>
-            );
-          }
-
+        if (error) {
           return (
-            <Box sx={{ 
-              p: 3,
-              height: '100%',
-              bgcolor: theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
-              borderRadius: 'inherit',
-              overflow: 'auto'
-            }}>
-              <pre style={{ 
-                margin: 0,
-                fontFamily: 'monospace',
-                fontSize: '0.875rem',
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-word'
-              }}>
-                {content}
-              </pre>
+            <Alert severity="error" sx={{ mt: 2 }}>
+              {error}
+            </Alert>
+          );
+        }
+
+        if (!content) {
+          return (
+            <Box sx={{ p: 2, textAlign: 'center' }}>
+              <CircularProgress size={24} />
             </Box>
           );
         }
-      }
-      
-      // For all other files or when direct viewing is not possible
-      return (
-        <Stack spacing={2}>
-          {fileUrl && (
-            <Box sx={{ textAlign: 'center' }}>
-              <Button
-                variant="contained"
-                color="primary"
-                href={fileUrl}
-                download={selectedAttachment.filename}
-                startIcon={<IconPaperclip size={20} />}
-              >
-                Download {selectedAttachment.filename}
-              </Button>
-            </Box>
-          )}
-          
-          {/* Show processed content if available */}
-          {selectedAttachment.processed_content?.overview && (
-            <Box>
-              <Typography variant="subtitle2" color="text.secondary">Overview</Typography>
-              <Typography variant="body2">{selectedAttachment.processed_content.overview}</Typography>
-            </Box>
-          )}
-          
-          {selectedAttachment.processed_content?.text && (
-            <Box sx={{ 
-              p: 3,
-              bgcolor: theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
-              borderRadius: 1,
+
+        return (
+          <Box sx={{ 
+            p: 3,
+            height: '100%',
+            bgcolor: theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
+            borderRadius: 'inherit',
+            overflow: 'auto'
+          }}>
+            <pre style={{ 
+              margin: 0,
               fontFamily: 'monospace',
               fontSize: '0.875rem',
               whiteSpace: 'pre-wrap',
               wordBreak: 'break-word'
             }}>
-              {selectedAttachment.processed_content.text}
-            </Box>
-          )}
-          
-          {selectedAttachment.processed_content?.analysis && (
-            <Box>
-              <Typography variant="subtitle2" color="text.secondary">Analysis</Typography>
-              <Stack spacing={1}>
-                {selectedAttachment.processed_content.analysis.objects && (
-                  <Typography variant="body2">
-                    Objects detected: {selectedAttachment.processed_content.analysis.objects.join(', ')}
-                  </Typography>
-                )}
-                {selectedAttachment.processed_content.analysis.text_detected && (
-                  <Typography variant="body2">Text detected in file</Typography>
-                )}
-              </Stack>
-            </Box>
-          )}
-
-          {selectedAttachment.processed_content?.error && (
-            <Alert severity="error">
-              {selectedAttachment.processed_content.error}
-            </Alert>
-          )}
+              {content}
+            </pre>
+          </Box>
+        );
+      }
+      
+      // For all other files or when direct viewing is not possible
+      return (
+        <Stack spacing={2}>
+          <Box sx={{ textAlign: 'center' }}>
+            <Button
+              variant="contained"
+              color="primary"
+              href={fileUrl}
+              download={selectedAttachment.filename}
+              startIcon={<IconPaperclip size={20} />}
+            >
+              Download {selectedAttachment.filename}
+            </Button>
+          </Box>
         </Stack>
       );
     };
@@ -1457,6 +1655,19 @@ const ChatContent: React.FC = () => {
     handleMenuClose();
   };
 
+  // Add new function to toggle system message expansion
+  const toggleSystemMessage = (messageId: string) => {
+    setExpandedSystemMessages(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(messageId)) {
+        newSet.delete(messageId);
+      } else {
+        newSet.add(messageId);
+      }
+      return newSet;
+    });
+  };
+
   return (
     <Box
       sx={{
@@ -1473,6 +1684,14 @@ const ChatContent: React.FC = () => {
       ref={dropZoneRef}
       id="chat-content-container"
     >
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileSelect}
+        style={{ display: 'none' }}
+        multiple
+        accept={Array.from(ALLOWED_MIME_TYPES).join(',')}
+      />
       {activeThread && (
         <Box sx={{ 
           p: 3, 
@@ -1491,16 +1710,16 @@ const ChatContent: React.FC = () => {
             <Stack direction="row" spacing={1} alignItems="center">
               <Tooltip
                 title={
-                  <Box sx={{ p: 1, fontFamily: 'monospace' }}>
+                  <Box sx={{ p: 1, fontFamily: 'monospace', color: 'common.white' }}>
                     {activeThread && (() => {
                       const { tools, total_calls } = calculateToolUsage();
                       const toolNames = Object.keys(tools);
                       
                       return (
                         <>
-                          <Box sx={{ color: 'primary.light', mb: 0.5 }}>Tool Usage:</Box>
+                          <Box sx={{ mb: 0.5 }}>Tool Usage:</Box>
                           {toolNames.map((toolName) => (
-                            <Box key={toolName} sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100' }}>
+                            <Box key={toolName} sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
                               <span>{toolName}:</span>
                               <span>{tools[toolName]}</span>
                             </Box>
@@ -1508,14 +1727,14 @@ const ChatContent: React.FC = () => {
                           {toolNames.length > 1 && (
                             <>
                               <Divider sx={{ my: 0.5, borderColor: 'rgba(255, 255, 255, 0.2)' }} />
-                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100' }}>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
                                 <span>Total:</span>
                                 <span>{total_calls}</span>
                               </Box>
                             </>
                           )}
                           {toolNames.length === 0 && (
-                            <Box sx={{ color: 'grey.100' }}>No tools used</Box>
+                            <Box>No tools used</Box>
                           )}
                         </>
                       );
@@ -1536,52 +1755,52 @@ const ChatContent: React.FC = () => {
             <Stack direction="row" spacing={1} alignItems="center">
               <Tooltip
                 title={
-                  <Box sx={{ p: 1, fontFamily: 'monospace' }}>
+                  <Box sx={{ p: 1, fontFamily: 'monospace', color: 'common.white' }}>
                     {activeThread && (() => {
                       const { modelUsage, overall } = calculateTokenUsage();
                       const modelCount = Object.keys(modelUsage).length;
                       
                       return (
                         <>
-                          <Box sx={{ color: 'primary.light', mb: 0.5 }}>Token Usage by Model:</Box>
+                          <Box sx={{ mb: 0.5 }}>Token Usage by Model:</Box>
                           {Object.entries(modelUsage || {}).map(([model, usage]) => (
                             <Box key={model}>
-                              <Box sx={{ color: 'primary.light', mt: 1, mb: 0.5 }}>
+                              <Box sx={{ mt: 1, mb: 0.5 }}>
                                 {model}:
                               </Box>
-                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100' }}>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
                                 <span>Prompt:</span>
                                 <span>{usage.prompt_tokens.toLocaleString()}</span>
                               </Box>
-                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100' }}>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
                                 <span>Completion:</span>
                                 <span>{usage.completion_tokens.toLocaleString()}</span>
                               </Box>
                               <Divider sx={{ my: 0.5, borderColor: 'rgba(255, 255, 255, 0.2)' }} />
-                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100' }}>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
                                 <span>Total:</span>
                                 <span>{usage.total_tokens.toLocaleString()}</span>
                               </Box>
-                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100', fontSize: '0.85em' }}>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, fontSize: '0.85em' }}>
                                 <span>Calls:</span>
                                 <span>{usage.calls}</span>
                               </Box>
-                              {modelCount > 1 && <Divider sx={{ my: 1 }} />}
+                              {modelCount > 1 && <Divider sx={{ my: 1, borderColor: 'rgba(255, 255, 255, 0.2)' }} />}
                             </Box>
                           ))}
                           {modelCount > 1 && (
                             <Box sx={{ mt: 1 }}>
-                              <Box sx={{ color: 'primary.light', mb: 0.5 }}>Overall Usage:</Box>
-                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100' }}>
+                              <Box sx={{ mb: 0.5 }}>Overall Usage:</Box>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
                                 <span>Prompt:</span>
                                 <span>{overall.prompt_tokens.toLocaleString()}</span>
                               </Box>
-                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100' }}>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
                                 <span>Completion:</span>
                                 <span>{overall.completion_tokens.toLocaleString()}</span>
                               </Box>
                               <Divider sx={{ my: 0.5, borderColor: 'rgba(255, 255, 255, 0.2)' }} />
-                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100' }}>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
                                 <span>Total:</span>
                                 <span>{overall.total_tokens.toLocaleString()}</span>
                               </Box>
@@ -1712,13 +1931,6 @@ const ChatContent: React.FC = () => {
         )}
         
         <Stack direction="row" alignItems="flex-end">
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileSelect}
-            style={{ display: 'none' }}
-            multiple
-          />
           <Box sx={{ 
             flexGrow: 1,
             display: 'flex',
@@ -1784,6 +1996,16 @@ const ChatContent: React.FC = () => {
                           deleteIcon={<IconX size={14} />}
                           variant="outlined"
                           size="small"
+                          sx={{
+                            borderColor: theme => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.23)' : 'rgba(0, 0, 0, 0.23)',
+                            color: 'text.primary',
+                            '& .MuiChip-deleteIcon': {
+                              color: 'text.secondary',
+                              '&:hover': {
+                                color: 'error.main',
+                              },
+                            },
+                          }}
                         />
                       ))}
                     </Stack>

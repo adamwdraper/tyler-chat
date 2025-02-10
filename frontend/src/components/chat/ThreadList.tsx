@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { List, Box, Typography, IconButton, Stack } from '@mui/material';
 import { IconPlus } from '@tabler/icons-react';
 import { useSelector } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
 import ThreadListItem from './ThreadListItem';
 import { fetchThreads, setCurrentThread } from '@/store/chat/ChatSlice';
 import { Thread } from '@/types/chat';
@@ -15,6 +16,7 @@ interface Props {
 
 const ThreadList: React.FC<Props> = ({ showMobileSidebar }) => {
   const dispatch = useAppDispatch();
+  const navigate = useNavigate();
   const { threads, currentThread, loading } = useSelector((state: RootState) => state.chat);
   const theme = useTheme();
 
@@ -23,14 +25,20 @@ const ThreadList: React.FC<Props> = ({ showMobileSidebar }) => {
   }, [dispatch]);
 
   const handleThreadClick = (threadId: string) => {
-    dispatch(setCurrentThread(threadId));
+    navigate(`/thread/${threadId}`);
     if (showMobileSidebar) {
       showMobileSidebar();
     }
   };
 
-  const handleNewChat = () => {
-    dispatch(setCurrentThread(null));
+  const handleNewChat = async () => {
+    // First clear the current thread in Redux
+    await dispatch(setCurrentThread(null));
+    
+    // Then navigate to root path
+    navigate('/', { replace: true });
+    
+    // Finally close mobile sidebar if needed
     if (showMobileSidebar) {
       showMobileSidebar();
     }
@@ -46,24 +54,25 @@ const ThreadList: React.FC<Props> = ({ showMobileSidebar }) => {
   }
 
   return (
-    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      {/* Header */}
-      <Box sx={{ 
-        py: 3,
-        px: 4,
+    <Box
+      sx={{
+        height: '100%',
         display: 'flex',
-      }}>
-        <Stack direction="row" alignItems="center" justifyContent="space-between" width="100%">
-          <Typography variant="h6">Chats</Typography>
-          <IconButton 
-            onClick={handleNewChat}
+        flexDirection: 'column',
+      }}
+    >
+      <Box sx={{ p: 3 }}>
+        <Stack direction="row" alignItems="center" justifyContent="space-between">
+          <Typography variant="h5">Threads</Typography>
+          <IconButton
             color="primary"
+            onClick={handleNewChat}
             size="small"
             sx={{
-              bgcolor: 'primary.light',
+              bgcolor: theme => theme.palette.mode === 'dark' ? 'rgba(93, 135, 255, 0.1)' : 'primary.light',
+              color: 'primary.main',
               '&:hover': {
-                bgcolor: 'primary.main',
-                color: 'white',
+                bgcolor: theme => theme.palette.mode === 'dark' ? 'rgba(93, 135, 255, 0.2)' : 'primary.lighter',
               },
             }}
           >
@@ -72,16 +81,17 @@ const ThreadList: React.FC<Props> = ({ showMobileSidebar }) => {
         </Stack>
       </Box>
 
-      {/* Thread List */}
       <Box sx={{ 
         flexGrow: 1, 
         overflow: 'auto',
-        '&::-webkit-scrollbar': { display: 'none' },
-        msOverflowStyle: 'none',
-        scrollbarWidth: 'none',
+        msOverflowStyle: 'none', // Hide scrollbar for IE and Edge
+        scrollbarWidth: 'none', // Hide scrollbar for Firefox
+        '&::-webkit-scrollbar': { 
+          display: 'none', // Hide scrollbar for Chrome, Safari, and Opera
+        },
       }}>
-        <List sx={{ px: 2, height: '100%' }}>
-          {sortedThreads.map((thread: Thread) => (
+        <List sx={{ px: 2 }}>
+          {sortedThreads.map((thread) => (
             <ThreadListItem
               key={thread.id}
               thread={thread}

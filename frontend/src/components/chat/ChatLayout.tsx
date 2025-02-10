@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Box, useMediaQuery, useTheme, IconButton, Paper } from '@mui/material';
 import { IconMenu2 } from '@tabler/icons-react';
+import { Routes, Route } from 'react-router-dom';
 import ThreadList from './ThreadList';
 import ChatContent from './ChatContent';
 
@@ -70,7 +71,10 @@ const ChatLayout: React.FC = () => {
             </IconButton>
           </Box>
         )}
-        <ChatContent />
+        <Routes>
+          <Route path="/" element={<ChatContent />} />
+          <Route path="/thread/:threadId" element={<ChatContent />} />
+        </Routes>
       </Box>
     </Box>
   );

@@ -36,7 +36,11 @@ export const createThread = createAsyncThunk(
 
 export const addMessage = createAsyncThunk(
   'chat/addMessage',
-  async ({ threadId, message, process = true }: { threadId: string; message: MessageCreate; process?: boolean }) => {
+  async ({ threadId, message, process = true }: { 
+    threadId: string; 
+    message: MessageCreate; 
+    process: boolean;
+  }) => {
     try {
       // Create FormData if there are attachments
       if (message.attachments?.length) {
@@ -46,7 +50,7 @@ export const addMessage = createAsyncThunk(
         const messageData = { ...message };
         delete messageData.attachments;
         formData.append('message', JSON.stringify(messageData));
-        formData.append('process', String(process));
+        formData.append('process', process.toString());
         
         // Add each file
         message.attachments.forEach((attachment) => {
@@ -70,7 +74,7 @@ export const addMessage = createAsyncThunk(
       // No attachments, send regular JSON
       const formData = new FormData();
       formData.append('message', JSON.stringify(message));
-      formData.append('process', String(process));
+      formData.append('process', process.toString());
       
       const response = await axios.post(
         `${API_BASE_URL}/threads/${threadId}/messages`, 
