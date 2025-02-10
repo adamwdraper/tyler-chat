@@ -519,10 +519,15 @@ const ChatContent: React.FC = () => {
       >
         {functionName ? (
           <>
-            <Box component="span" sx={{ color: 'primary.main', fontWeight: 600 }}>
-              {functionName}
-            </Box>
-            {'\n\n'}
+            <Stack spacing={0.5}>
+              <Box component="span" sx={{ color: 'text.secondary', fontSize: '0.75rem', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 1 }}>
+                <IconTool size={14} />
+                Result
+              </Box>
+              <Box component="span" sx={{ color: 'secondary.main', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
+                {functionName}
+              </Box>
+            </Stack>
             {JSON.stringify(data, null, 2)}
           </>
         ) : (
@@ -564,7 +569,12 @@ const ChatContent: React.FC = () => {
   const renderContent = (content: string | (TextContent | ImageContent)[], role: string, message: Message, messages: Message[]) => {
     if (typeof content === 'string') {
       if (role === 'tool') {
-        return renderFormattedCode(content, message.name);
+        try {
+          const parsedContent = JSON.parse(content);
+          return renderFormattedCode(parsedContent, message.name);
+        } catch {
+          return renderFormattedCode(content, message.name);
+        }
       }
       const isPlainText = plainTextMessages.has(message.id);
       return isPlainText ? (
@@ -794,6 +804,7 @@ const ChatContent: React.FC = () => {
     contentRefs,
     maxHeight,
     plainTextMessages,
+    messages,
   }: {
     message: Message;
     isLastMessage: boolean;
@@ -804,6 +815,7 @@ const ChatContent: React.FC = () => {
     contentRefs: React.MutableRefObject<Map<string, HTMLDivElement>>;
     maxHeight: number;
     plainTextMessages: Set<string>;
+    messages: Message[];
   }) => {
     const [isHovered, setIsHovered] = React.useState(false);
     const [isCopied, setIsCopied] = React.useState(false);
@@ -906,7 +918,7 @@ const ChatContent: React.FC = () => {
                           },
                         }}
                       >
-                        {renderContent(message.content, message.role, message, [])}
+                        {renderContent(message.content, message.role, message, messages)}
                       </Box>
                       {!isExpanded && shouldShowExpand && (
                         <Box
@@ -950,6 +962,43 @@ const ChatContent: React.FC = () => {
                       </Box>
                     )}
                   </>
+                )}
+
+                {/* Render tool calls if present */}
+                {message.tool_calls && message.tool_calls.length > 0 && (
+                  <Box sx={{ mt: 2 }}>
+                    <Stack spacing={2}>
+                      {message.tool_calls.map((toolCall) => (
+                        <Paper
+                          key={toolCall.id}
+                          variant="outlined"
+                          sx={{
+                            bgcolor: theme => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
+                            fontFamily: 'monospace',
+                            overflow: 'hidden',
+                            fontSize: '0.875rem',
+                            whiteSpace: 'pre-wrap',
+                            wordWrap: 'break-word',
+                            width: '100%',
+                            wordBreak: 'break-word',
+                            color: 'text.secondary',
+                            p: 2,
+                          }}
+                        >
+                          <Stack spacing={0.5}>
+                            <Box component="span" sx={{ color: 'text.secondary', fontSize: '0.75rem', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <IconTool size={14} />
+                              Call
+                            </Box>
+                            <Box component="span" sx={{ color: 'secondary.main', fontWeight: 600 }}>
+                              {toolCall.function.name}
+                            </Box>
+                          </Stack>
+                          {JSON.stringify(JSON.parse(toolCall.function.arguments), null, 2)}
+                        </Paper>
+                      ))}
+                    </Stack>
+                  </Box>
                 )}
 
                 {/* Attachments section - outside of height restriction */}
@@ -1114,6 +1163,7 @@ const ChatContent: React.FC = () => {
         contentRefs={contentRefs}
         maxHeight={maxHeight}
         plainTextMessages={plainTextMessages}
+        messages={messages}
       />
     );
   };
