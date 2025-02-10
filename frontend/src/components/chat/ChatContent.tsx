@@ -44,13 +44,14 @@ import {
   IconDotsVertical,
 } from '@tabler/icons-react';
 import { useSelector } from 'react-redux';
-import { addMessage, processThread, createThread, updateThread, deleteThread } from '@/store/chat/ChatSlice';
+import { addMessage, processThread, createThread, updateThread, deleteThread, setCurrentThread } from '@/store/chat/ChatSlice';
 import { RootState } from '@/store/Store';
 import { Message, Thread, ToolCall, TextContent, ImageContent, MessageCreate, MessageAttachment } from '@/types/chat';
 import Scrollbar from '@/components/custom-scroll/Scrollbar';
 import { useAppDispatch } from '@/hooks/useAppDispatch';
 import { formatTimeAgo } from '@/utils/dateUtils';
 import { useTimeAgoUpdater } from '@/hooks/useTimeAgoUpdater';
+import { useNavigate, useParams } from 'react-router-dom';
 
 const dotAnimation = keyframes`
   0%, 20% {
@@ -107,6 +108,8 @@ const TypingDots: React.FC = () => {
 const ChatContent: React.FC = () => {
   const theme = useTheme();
   const dispatch = useAppDispatch();
+  const navigate = useNavigate();
+  const { threadId } = useParams<{ threadId: string }>();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [newMessage, setNewMessage] = React.useState('');
   const [isProcessing, setIsProcessing] = React.useState(false);
@@ -131,6 +134,20 @@ const ChatContent: React.FC = () => {
   
   const { threads, currentThread } = useSelector((state: RootState) => state.chat);
   const activeThread = threads.find((t: Thread) => t.id === currentThread);
+
+  // Only sync from URL to Redux when there's a thread ID
+  useEffect(() => {
+    if (threadId) {
+      dispatch(setCurrentThread(threadId));
+    }
+  }, [threadId, dispatch]);
+
+  // Only sync from Redux to URL when there's a thread
+  useEffect(() => {
+    if (currentThread && window.location.pathname === '/') {
+      navigate(`/thread/${currentThread}`, { replace: true });
+    }
+  }, [currentThread, navigate]);
 
   // Use the custom hook for periodic updates
   const updateTimestamps = useCallback(() => {
@@ -327,6 +344,7 @@ const ChatContent: React.FC = () => {
     if (!threadId) {
       const newThread = await dispatch(createThread({ title: 'New Chat' })).unwrap();
       threadId = newThread.id;
+      navigate(`/thread/${threadId}`, { replace: true });
     }
 
     if (!threadId) return;
