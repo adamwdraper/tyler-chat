@@ -663,30 +663,168 @@ const ChatContent: React.FC = () => {
     return undefined;
   };
 
-  const renderMessage = (message: Message, index: number, messages: Message[]) => {
-    const isAI = message.role === 'assistant';
-    const isSystem = message.role === 'system';
-    const isTool = message.role === 'tool';
+  // Static components defined outside of ChatMessage
+  const MessageMetrics = React.memo(({ metrics }: { metrics: Message['metrics'] }) => (
+    <>
+      {metrics?.usage?.total_tokens > 0 && (
+        <Tooltip
+          title={
+            <Box sx={{ p: 1, fontFamily: 'monospace' }}>
+                <Box sx={{ color: 'primary.light', mb: 0.5 }}>
+                  {metrics.model || 'Unknown Model'}:
+                </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100' }}>
+                  <span>Prompt:</span>
+                  <span>{metrics.usage.prompt_tokens.toLocaleString()}</span>
+                </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100' }}>
+                  <span>Completion:</span>
+                  <span>{metrics.usage.completion_tokens.toLocaleString()}</span>
+                </Box>
+                <Divider sx={{ my: 0.5, borderColor: 'rgba(255, 255, 255, 0.2)' }} />
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100' }}>
+                  <span>Total:</span>
+                  <span>{metrics.usage.total_tokens.toLocaleString()}</span>
+                </Box>
+            </Box>
+          }
+          arrow
+          placement="top"
+        >
+          <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'default' }}>
+            <IconPlaystationCircle size={14} />
+            {metrics.usage.total_tokens.toLocaleString()}
+          </Box>
+        </Tooltip>
+      )}
+      {metrics?.timing?.latency > 0 && (
+        <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+          <IconClock size={14} />
+          {(metrics.timing.latency / 1000).toFixed(2)}s
+        </Box>
+      )}
+    </>
+  ));
+
+  const MessageTimeAgo = React.memo(({ timestamp }: { timestamp?: string }) => (
+    <Box component="span">
+      {timestamp ? formatTimeAgo(timestamp) : ''}
+    </Box>
+  ), () => true);
+
+  const MessageHoverActions = React.memo(({ 
+    isHovered,
+    isCopied,
+    isToolRelated,
+    isPlainText,
+    onCopy,
+    onToggleFormat 
+  }: { 
+    isHovered: boolean;
+    isCopied: boolean;
+    isToolRelated: boolean;
+    isPlainText: boolean;
+    onCopy: () => void;
+    onToggleFormat: () => void;
+  }) => {
+    if (!isHovered) return null;
+    return (
+      <Fade in={true}>
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          <IconButton
+            onClick={onCopy}
+            size="small"
+            sx={{ 
+              p: 0.5,
+              color: 'text.secondary',
+              '&:hover': {
+                color: 'primary.main',
+              }
+            }}
+          >
+            {isCopied ? <IconCheck size={14} /> : <IconCopy size={14} />}
+          </IconButton>
+          {!isToolRelated && (
+            <Tooltip title={isPlainText ? "Show as Markdown" : "Show as plain text"}>
+              <IconButton
+                onClick={onToggleFormat}
+                size="small"
+                sx={{ 
+                  p: 0.5,
+                  color: 'text.secondary',
+                  '&:hover': {
+                    color: 'primary.main',
+                  }
+                }}
+              >
+                {isPlainText ? <IconMarkdown size={14} /> : <IconAbc size={14} />}
+              </IconButton>
+            </Tooltip>
+          )}
+        </Box>
+      </Fade>
+    );
+  });
+
+  const ChatMessage = React.memo(({ 
+    message, 
+    isLastMessage, 
+    toggleMessageFormat,
+    expandedMessages,
+    contentHeights,
+    toggleMessageExpand,
+    contentRefs,
+    maxHeight,
+    plainTextMessages,
+  }: {
+    message: Message;
+    isLastMessage: boolean;
+    toggleMessageFormat: (messageId: string) => void;
+    expandedMessages: Set<string>;
+    contentHeights: Map<string, number>;
+    toggleMessageExpand: (messageId: string) => void;
+    contentRefs: React.MutableRefObject<Map<string, HTMLDivElement>>;
+    maxHeight: number;
+    plainTextMessages: Set<string>;
+  }) => {
+    const [isHovered, setIsHovered] = React.useState(false);
+    const [isCopied, setIsCopied] = React.useState(false);
     const isExpanded = expandedMessages.has(message.id);
     const contentHeight = contentHeights.get(message.id) || 0;
     const shouldShowExpand = contentHeight > maxHeight;
-    const isLastMessage = index === messages.length - 1;
-    const isHovered = hoveredMessageId === message.id;
-
-    // Skip tool responses as they'll be rendered with their calls
-    if (isTool && !message.tool_call_id) {
-      return null;
-    }
-    
-    // Add this right before the timestamp and metrics section
     const isToolRelated = message.role === 'tool' || message.tool_call_id;
     const isPlainText = plainTextMessages.has(message.id);
 
+    const handleCopyMessage = React.useCallback(async () => {
+      let textToCopy = '';
+      if (typeof message.content === 'string') {
+        textToCopy = message.content;
+      } else if (Array.isArray(message.content)) {
+        textToCopy = message.content
+          .filter(item => item.type === 'text')
+          .map(item => (item as TextContent).text)
+          .join('\n\n');
+      }
+
+      try {
+        await navigator.clipboard.writeText(textToCopy);
+        setIsCopied(true);
+        setTimeout(() => setIsCopied(false), 2000);
+      } catch (err) {
+        console.error('Failed to copy message:', err);
+      }
+    }, [message.content]);
+
+    const setContentRef = React.useCallback((el: HTMLDivElement | null) => {
+      if (el) {
+        contentRefs.current.set(message.id, el);
+      }
+    }, [message.id, contentRefs]);
+
     return (
       <Box 
-        key={message.id}
-        onMouseEnter={() => setHoveredMessageId(message.id)}
-        onMouseLeave={() => setHoveredMessageId(null)}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
       >
         <Box p={3} sx={{ display: 'flex', justifyContent: 'center' }}>
           <Box sx={{ width: '100%', maxWidth: 900 }}>
@@ -703,7 +841,6 @@ const ChatContent: React.FC = () => {
                 {getMessageIcon(message.role)}
               </Avatar>
               <Box sx={{ flex: 1, mt: '10px' }}>
-                {/* Message content with gradient fade */}
                 {message.content && (
                   <Box
                     sx={{
@@ -713,11 +850,7 @@ const ChatContent: React.FC = () => {
                     }}
                   >
                     <Box
-                      ref={el => {
-                        if (el) {
-                          contentRefs.current.set(message.id, el as HTMLDivElement);
-                        }
-                      }}
+                      ref={setContentRef}
                       sx={{
                         '& p': { 
                           m: 0, 
@@ -752,45 +885,9 @@ const ChatContent: React.FC = () => {
                           bgcolor: 'transparent',
                           color: 'text.primary',
                         },
-                        '& ul, & ol': {
-                          my: 0,
-                          pl: 3,
-                        },
-                        '& li + li': {
-                          mt: 0.5,
-                        },
-                        '& a': {
-                          color: 'primary.main',
-                          textDecoration: 'none',
-                          '&:hover': {
-                            textDecoration: 'underline',
-                          },
-                        },
-                        '& blockquote': {
-                          borderLeft: 4,
-                          borderColor: theme => theme.palette.mode === 'dark' ? 'grey.700' : 'grey.300',
-                          my: 1,
-                          pl: 2,
-                          ml: 0,
-                          color: 'text.secondary',
-                        },
-                        '& table': {
-                          borderCollapse: 'collapse',
-                          width: '100%',
-                          my: 2,
-                        },
-                        '& th, & td': {
-                          border: 1,
-                          borderColor: theme => theme.palette.mode === 'dark' ? 'grey.700' : 'grey.300',
-                          p: 1,
-                        },
-                        '& th': {
-                          bgcolor: theme => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.100',
-                          fontWeight: 'bold',
-                        },
                       }}
                     >
-                      {renderContent(message.content, message.role, message, messages)}
+                      {renderContent(message.content, message.role, message, [])}
                     </Box>
                     {!isExpanded && shouldShowExpand && (
                       <Box
@@ -800,7 +897,7 @@ const ChatContent: React.FC = () => {
                           left: 0,
                           right: 0,
                           height: '110px',
-                          background: theme.palette.mode === 'dark' 
+                          background: theme => theme.palette.mode === 'dark' 
                             ? 'linear-gradient(180deg, transparent 0%, rgba(33,33,33,0.8) 50%, rgba(33,33,33,0.95) 100%)'
                             : 'linear-gradient(180deg, transparent 0%, rgba(255,255,255,0.8) 50%, rgba(255,255,255,0.95) 100%)',
                           display: 'flex',
@@ -814,13 +911,7 @@ const ChatContent: React.FC = () => {
                           variant="text"
                           onClick={() => toggleMessageExpand(message.id)}
                           startIcon={<IconChevronDown size={16} />}
-                          sx={{ 
-                            mb: 1,
-                            bgcolor: theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.5)',
-                            '&:hover': {
-                              bgcolor: theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.7)',
-                            }
-                          }}
+                          sx={{ mb: 1 }}
                         >
                           More
                         </Button>
@@ -841,148 +932,7 @@ const ChatContent: React.FC = () => {
                   </Box>
                 )}
 
-                {/* Tool calls */}
-                {message.tool_calls && message.tool_calls.length > 0 && (
-                  <Box sx={{ mt: 2 }}>
-                    <Stack spacing={2}>
-                      {message.tool_calls.map((call) => (
-                        <Paper
-                          key={call.id}
-                          variant="outlined"
-                          sx={{
-                            bgcolor: theme => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
-                            fontFamily: 'monospace',
-                            overflow: 'hidden'
-                          }}
-                        >
-                          {/* Tool Call */}
-                          <Box sx={{ p: 2 }}>
-                            <Box>
-                              <Box
-                                component="span"
-                                sx={{ 
-                                  fontFamily: 'monospace',
-                                  color: 'primary.main',
-                                  fontWeight: 600,
-                                  fontSize: '0.875rem',
-                                }}
-                              >
-                                {call.function.name}
-                              </Box>
-                              <Box
-                                component="span"
-                                sx={{ 
-                                  fontFamily: 'monospace',
-                                  color: 'text.secondary',
-                                  whiteSpace: 'pre-wrap',
-                                  fontSize: '0.875rem',
-                                }}
-                              >
-                                {(() => {
-                                  try {
-                                    const args = JSON.parse(call.function.arguments);
-                                    return ` ({\n    ${Object.entries(args).map(([key, value]) => `"${key}": ${JSON.stringify(value)}`).join(',\n    ')}\n})`
-                                  } catch {
-                                    return ` (${call.function.arguments})`
-                                  }
-                                })()}
-                              </Box>
-                            </Box>
-                          </Box>
-                        </Paper>
-                      ))}
-                    </Stack>
-                  </Box>
-                )}
-
-                {/* Attachments */}
-                {message.attachments && message.attachments.length > 0 && (
-                  <Box sx={{ mt: 2 }}>
-                    <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
-                      {message.attachments.map((attachment, index) => {
-                        const imageUrl = getImageUrl(attachment.processed_content, attachment.mime_type);
-                        
-                        if (attachment.mime_type?.startsWith('image/')) {
-                          return (
-                            <Box 
-                              key={index}
-                              sx={{ 
-                                width: '100%',
-                                overflow: 'hidden',
-                                borderRadius: 1,
-                                border: 1,
-                                borderColor: 'divider',
-                                p: 2,
-                                display: 'flex',
-                                justifyContent: 'center',
-                                alignItems: 'center',
-                                cursor: 'pointer'
-                              }}
-                              onClick={() => handleAttachmentClick(attachment)}
-                            >
-                              {imageUrl ? (
-                                <Box sx={{ 
-                                  height: '100%', 
-                                  display: 'flex', 
-                                  alignItems: 'center', 
-                                  justifyContent: 'center'
-                                }}>
-                                  <img 
-                                    src={imageUrl}
-                                    alt={attachment.filename}
-                                    style={{ 
-                                      maxWidth: '100%',
-                                      height: 'auto',
-                                      maxHeight: 300,
-                                      display: 'block',
-                                      margin: '0 auto',
-                                      borderRadius: theme.shape.borderRadius
-                                    }}
-                                    onError={(e) => {
-                                      console.error('Image failed to load:', {
-                                        src: imageUrl,
-                                        error: e
-                                      });
-                                    }}
-                                  />
-                                </Box>
-                              ) : (
-                                <Box sx={{ p: 2, textAlign: 'center' }}>
-                                  <Typography variant="body2" color="text.secondary">
-                                    Processing image...
-                                  </Typography>
-                                </Box>
-                              )}
-                            </Box>
-                          );
-                        }
-                        
-                        return (
-                          <Chip
-                            key={index}
-                            label={attachment.filename}
-                            variant="outlined"
-                            size="medium"
-                            icon={<IconPaperclip size={16} />}
-                            onClick={() => handleAttachmentClick(attachment)}
-                            sx={{
-                              cursor: 'pointer',
-                              '& .MuiChip-label': {
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis'
-                              },
-                              '&:hover': {
-                                bgcolor: 'action.hover'
-                              }
-                            }}
-                          />
-                        );
-                      })}
-                    </Stack>
-                  </Box>
-                )}
-
-                {/* Timestamp and Metrics */}
+                {/* Footer with metrics and timestamp */}
                 <Box 
                   sx={{ 
                     display: 'flex',
@@ -992,89 +942,33 @@ const ChatContent: React.FC = () => {
                     gap: 2,
                     color: 'text.secondary',
                     typography: 'caption',
+                    height: 28, // Explicit height to prevent jumping
                   }}
                 >
-                  <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-                    <Fade in={isHovered}>
-                      <Box sx={{ display: 'flex', gap: 2 }}>
-                        <IconButton
-                          onClick={() => handleCopyMessage(message)}
-                          size="small"
-                          sx={{ 
-                            p: 0.5,
-                            color: 'text.secondary',
-                            '&:hover': {
-                              color: 'primary.main',
-                            }
-                          }}
-                        >
-                          {copiedMessageId === message.id ? <IconCheck size={14} /> : <IconCopy size={14} />}
-                        </IconButton>
-                        {!isToolRelated && (
-                          <Tooltip title={isPlainText ? "Show as Markdown" : "Show as plain text"}>
-                            <IconButton
-                              onClick={() => toggleMessageFormat(message.id)}
-                              size="small"
-                              sx={{ 
-                                p: 0.5,
-                                color: 'text.secondary',
-                                '&:hover': {
-                                  color: 'primary.main',
-                                }
-                              }}
-                            >
-                              {isPlainText ? <IconMarkdown size={14} /> : <IconAbc size={14} />}
-                            </IconButton>
-                          </Tooltip>
-                        )}
-                      </Box>
-                    </Fade>
+                  <Box sx={{ 
+                    display: 'flex', 
+                    gap: 2, 
+                    alignItems: 'center', 
+                    minWidth: 80,
+                    height: '100%', // Match parent height
+                  }}>
+                    <MessageHoverActions 
+                      isHovered={isHovered}
+                      isCopied={isCopied}
+                      isToolRelated={isToolRelated}
+                      isPlainText={isPlainText}
+                      onCopy={handleCopyMessage}
+                      onToggleFormat={() => toggleMessageFormat(message.id)}
+                    />
                   </Box>
-                  <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-                    {message.metrics && (
-                      <>
-                        {message.metrics.usage?.total_tokens > 0 && (
-                          <Tooltip
-                            title={
-                              <Box sx={{ p: 1, fontFamily: 'monospace' }}>
-                                  <Box sx={{ color: 'primary.light', mb: 0.5 }}>
-                                    {message.metrics.model || 'Unknown Model'}:
-                                  </Box>
-                                  <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100' }}>
-                                    <span>Prompt:</span>
-                                    <span>{message.metrics.usage.prompt_tokens.toLocaleString()}</span>
-                                  </Box>
-                                  <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100' }}>
-                                    <span>Completion:</span>
-                                    <span>{message.metrics.usage.completion_tokens.toLocaleString()}</span>
-                                  </Box>
-                                  <Divider sx={{ my: 0.5, borderColor: 'rgba(255, 255, 255, 0.2)' }} />
-                                  <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, color: 'grey.100' }}>
-                                    <span>Total:</span>
-                                    <span>{message.metrics.usage.total_tokens.toLocaleString()}</span>
-                                  </Box>
-                              </Box>
-                            }
-                            arrow
-                            placement="top"
-                          >
-                            <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'default' }}>
-                              <IconPlaystationCircle size={14} />
-                              {message.metrics.usage.total_tokens.toLocaleString()}
-                            </Box>
-                          </Tooltip>
-                        )}
-                        {message.metrics?.timing?.latency > 0 && (
-                          <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                            <IconClock size={14} />
-                            {(message.metrics.timing.latency / 1000).toFixed(2)}s
-                          </Box>
-                        )}
-                      </>
-                    )}
-                    <Box component="span">
-                      {message.timestamp ? formatTimeAgo(message.timestamp) : ''}
-                    </Box>
+                  <Box sx={{ 
+                    display: 'flex', 
+                    gap: 2, 
+                    alignItems: 'center',
+                    height: '100%', // Match parent height
+                  }}>
+                    {message.metrics && <MessageMetrics metrics={message.metrics} />}
+                    <MessageTimeAgo timestamp={message.timestamp} />
                   </Box>
                 </Box>
               </Box>
@@ -1083,6 +977,37 @@ const ChatContent: React.FC = () => {
         </Box>
         {!isLastMessage && <Divider />}
       </Box>
+    );
+  }, (prevProps, nextProps) => {
+    // Custom comparison function for React.memo
+    return (
+      prevProps.message.id === nextProps.message.id &&
+      prevProps.isLastMessage === nextProps.isLastMessage &&
+      prevProps.expandedMessages.has(prevProps.message.id) === nextProps.expandedMessages.has(nextProps.message.id) &&
+      prevProps.contentHeights.get(prevProps.message.id) === nextProps.contentHeights.get(nextProps.message.id) &&
+      prevProps.plainTextMessages.has(prevProps.message.id) === nextProps.plainTextMessages.has(nextProps.message.id)
+    );
+  });
+
+  const renderMessage = (message: Message, index: number, messages: Message[]) => {
+    // Skip tool responses as they'll be rendered with their calls
+    if (message.role === 'tool' && !message.tool_call_id) {
+      return null;
+    }
+
+    return (
+      <ChatMessage
+        key={message.id}
+        message={message}
+        isLastMessage={index === messages.length - 1}
+        toggleMessageFormat={toggleMessageFormat}
+        expandedMessages={expandedMessages}
+        contentHeights={contentHeights}
+        toggleMessageExpand={toggleMessageExpand}
+        contentRefs={contentRefs}
+        maxHeight={maxHeight}
+        plainTextMessages={plainTextMessages}
+      />
     );
   };
 
@@ -1454,7 +1379,7 @@ const ChatContent: React.FC = () => {
         }}
         container={() => document.getElementById('chat-content-container')}
       >
-        <Fade in={!!selectedAttachment}>
+        <Fade in={true}>
           <Box sx={{
             position: 'absolute',
             top: 0,
