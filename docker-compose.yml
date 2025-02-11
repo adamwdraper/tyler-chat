@@ -1,15 +1,22 @@
 version: '3.8'
+
 services:
-  db:
-    image: postgres:15
+  postgres:
+    image: postgres:16
+    container_name: tyler-postgres
     environment:
-      POSTGRES_DB: tyler-chat
-      POSTGRES_USER: tyler_user
-      POSTGRES_PASSWORD: your_password
+      POSTGRES_DB: ${TYLER_DB_NAME:-tyler}
+      POSTGRES_USER: ${TYLER_DB_USER:-tyler}
+      POSTGRES_PASSWORD: ${TYLER_DB_PASSWORD:-tyler_dev}
     ports:
-      - "5434:5432"
+      - "${TYLER_DB_PORT:-5433}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${TYLER_DB_USER:-tyler}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
 volumes:
   postgres_data: 

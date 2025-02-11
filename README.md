@@ -44,14 +44,10 @@ A FastAPI server that manages:
 
 ### Installation
 
-1. **Clone the repository and set up environment:**
+1. **Clone the repository:**
 ```bash
 git clone [your-repo-url]
 cd tyler-chat
-
-# Create Python virtual environment
-python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
 # Install backend dependencies
 cd backend
@@ -72,20 +68,43 @@ cp .env.example .env
 
 Required environment variables:
 ```bash
-# OpenAI Configuration
-OPENAI_API_KEY=your-openai-api-key
+# Server Configuration
+HOST=localhost                        # Server host
+PORT=8000                            # Server port
+CORS_ORIGINS=http://localhost:5173   # Frontend URL for CORS
 
-# Database Configuration (for Docker setup)
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=tyler
-DB_USER=tyler_user
-DB_PASSWORD=your_password
+# Database Configuration
+TYLER_DB_TYPE=postgresql             # Database type
+TYLER_DB_HOST=localhost             # Database host
+TYLER_DB_PORT=5432                  # Database port
+TYLER_DB_NAME=tyler                 # Database name
+TYLER_DB_USER=tyler                 # Database user
+TYLER_DB_PASSWORD=tyler_dev         # Database password
+
+# Optional Database Settings
+TYLER_DB_ECHO=false                 # SQL query logging
+TYLER_DB_POOL_SIZE=5                # Connection pool size
+TYLER_DB_MAX_OVERFLOW=10            # Max extra connections
+TYLER_DB_POOL_TIMEOUT=30            # Connection timeout (seconds)
+TYLER_DB_POOL_RECYCLE=1800         # Connection recycle time (seconds)
+
+# OpenAI Configuration
+OPENAI_API_KEY=your_openai_api_key  # Your OpenAI API key
+
+# Logging Configuration
+WANDB_API_KEY=your_wandb_api_key    # Weights & Biases API key for monitoring
 
 # Optional Integrations
-NOTION_TOKEN=your-notion-token
-SLACK_BOT_TOKEN=your-slack-bot-token
-SLACK_SIGNING_SECRET=your-slack-signing-secret
+NOTION_TOKEN=your_notion_token      # Notion integration token
+SLACK_BOT_TOKEN=your_slack_bot_token # Slack bot token
+SLACK_SIGNING_SECRET=your_slack_signing_secret # Slack signing secret
+
+# File Storage Configuration
+TYLER_FILE_STORAGE_TYPE=local       # Storage type (local)
+TYLER_FILE_STORAGE_PATH=/path/to/files  # Storage path (defaults to ~/.tyler/files)
+
+# Other Settings
+LOG_LEVEL=INFO                      # Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
 ```
 
 3. **Start PostgreSQL with Docker:**
