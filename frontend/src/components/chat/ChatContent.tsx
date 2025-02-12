@@ -43,6 +43,7 @@ import {
   IconPaperclip,
   IconX,
   IconDotsVertical,
+  IconBug,
 } from '@tabler/icons-react';
 import { useSelector } from 'react-redux';
 import { addMessage, processThread, createThread, updateThread, deleteThread, setCurrentThread } from '@/store/chat/ChatSlice';
@@ -718,6 +719,25 @@ const ChatContent: React.FC = () => {
   // Static components defined outside of ChatMessage
   const MessageMetrics = React.memo(({ metrics }: { metrics: Message['metrics'] }) => (
     <>
+      {metrics?.weave_call?.ui_url && (
+        <Tooltip title="View trace in Weave" arrow placement="top">
+          <Link
+            href={metrics.weave_call.ui_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            sx={{ 
+              display: 'flex',
+              alignItems: 'center',
+              color: 'text.secondary',
+              '&:hover': {
+                color: 'primary.main'
+              }
+            }}
+          >
+            <IconBug size={14} />
+          </Link>
+        </Tooltip>
+      )}
       {metrics?.usage?.total_tokens > 0 && (
         <Tooltip
           title={
