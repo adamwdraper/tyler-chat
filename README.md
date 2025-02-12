@@ -34,7 +34,7 @@ A FastAPI server that manages:
 - **Database Storage**: PostgreSQL for persistent data
 - **API Documentation**: Auto-generated OpenAPI docs
 
-## User Guide
+## Setup and Installation
 
 ### Prerequisites
 
@@ -42,25 +42,20 @@ A FastAPI server that manages:
 - Node.js and npm
 - Docker and Docker Compose (for PostgreSQL)
 
-### Installation
+### Backend Setup
 
 1. **Clone the repository:**
 ```bash
 git clone [your-repo-url]
 cd tyler-chat
-
-# Install backend dependencies
-cd backend
-pip install -r requirements.txt
-
-# Install frontend dependencies
-cd ../frontend
-npm install
 ```
 
-2. **Configure environment variables:**
+2. **Install backend dependencies:**
+```bash
+pip install -r requirements.txt
+```
 
-Create a `.env` file in the backend directory:
+3. **Configure environment variables:**
 ```bash
 cd backend
 cp .env.example .env
@@ -107,63 +102,42 @@ TYLER_FILE_STORAGE_PATH=/path/to/files  # Storage path (defaults to ~/.tyler/fil
 LOG_LEVEL=INFO                      # Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
 ```
 
-3. **Start PostgreSQL with Docker:**
+4. **Start PostgreSQL with Docker:**
 ```bash
 # From project root
 docker-compose up -d
+
+# Initialize the database (uses the same .env values)
+python -m tyler.database.cli init
 ```
 
-### Running the Application
-
-1. **Start the Backend Server:**
+5. **Start the Backend Server:**
 ```bash
 cd backend
 ./run.sh
 ```
 
-2. **Start the Frontend Development Server:**
-```bash
-cd frontend
-npm run dev
-```
-
-The application will be available at:
-- Frontend: http://localhost:5173
-- Backend API: http://localhost:8000
+The backend will be available at:
+- API: http://localhost:8000
 - API Documentation: http://localhost:8000/docs
 
-### Development Setup
+### Frontend Setup
 
-For development work:
-
-1. **Backend Development:**
-```bash
-cd backend
-pip install -e ".[dev]"
-```
-
-2. **Frontend Development:**
+1. **Install frontend dependencies:**
 ```bash
 cd frontend
 npm install
+```
 
-# Run with hot reloading
+2. **Start the Frontend Development Server:**
+```bash
 npm run dev
 ```
 
-3. **Database Management:**
-```bash
-# Start PostgreSQL
-docker-compose up -d
+The frontend will be available at:
+- http://localhost:5173
 
-# Stop PostgreSQL
-docker-compose down
-
-# View logs
-docker-compose logs postgres
-```
-
-### Testing
+## Testing
 
 ```bash
 # Backend tests

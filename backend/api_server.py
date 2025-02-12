@@ -30,8 +30,12 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 # Initialize weave for tracing (optional - requires WANDB_API_KEY environment variable)
-if os.getenv("WANDB_API_KEY"):
-    weave.init("tyler")
+try:
+    if os.getenv("WANDB_API_KEY"):
+        weave.init("tyler")
+        logger.info("Weave tracing initialized successfully")
+except Exception as e:
+    logger.warning(f"Failed to initialize weave tracing: {e}. Continuing without weave.")
 
 # Pydantic models for request/response
 class ImageUrl(BaseModel):
@@ -72,6 +76,20 @@ async def lifespan(app: FastAPI):
     logger.info("Initializing thread store...")
     await thread_store.initialize()
     
+    # Create file storage directory if it doesn't exist
+    storage_path = os.getenv("TYLER_FILE_STORAGE_PATH", os.path.join(os.path.dirname(__file__), "files"))
+    if storage_path.startswith("/"):  # Convert absolute path to relative
+        storage_path = os.path.join(os.path.dirname(__file__), storage_path.lstrip("/"))
+    os.makedirs(storage_path, exist_ok=True)
+    logger.info(f"Ensured file storage directory exists at: {storage_path}")
+    
+    # Set environment variable for FileStore to use
+    os.environ["TYLER_FILE_STORAGE_PATH"] = storage_path
+    
+    # Mount the files directory after creating it
+    app.mount("/files", StaticFiles(directory=storage_path), name="files")
+    logger.info(f"Mounted static files directory at: {storage_path}")
+    
     # Verify file store is accessible
     logger.info("Checking file store health...")
     file_store = FileStore()
@@ -98,9 +116,6 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
-
-# Mount the files directory
-app.mount("/files", StaticFiles(directory="files"), name="files")
 
 # Initialize thread store and agent
 # Construct PostgreSQL URL from environment variables
