@@ -109,12 +109,16 @@ app = FastAPI(
 )
 
 # Add CORS middleware
+frontend_port = os.getenv("FRONTEND_PORT", "3000")
+cors_origins = [f"http://localhost:{frontend_port}"]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Frontend development server
+    allow_origins=cors_origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=600  # Cache preflight requests for 10 minutes
 )
 
 # Initialize thread store and agent
