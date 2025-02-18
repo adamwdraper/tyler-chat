@@ -9,6 +9,8 @@ interface ChatState {
   currentThread: string | null;
   loading: boolean;
   error: string | null;
+  streaming: boolean;
+  streamingContent: string;
 }
 
 const initialState: ChatState = {
@@ -16,6 +18,8 @@ const initialState: ChatState = {
   currentThread: null,
   loading: false,
   error: null,
+  streaming: false,
+  streamingContent: ''
 };
 
 export const fetchThreads = createAsyncThunk(
@@ -124,6 +128,26 @@ const chatSlice = createSlice({
         state.threads.push(action.payload);
       }
     },
+    startStreaming: (state) => {
+      state.streaming = true;
+      state.streamingContent = '';
+    },
+    appendStreamContent: (state, action) => {
+      state.streamingContent += action.payload;
+    },
+    updateStreamingThread: (state, action) => {
+      const threadIndex = state.threads.findIndex(t => t.id === action.payload.id);
+      if (threadIndex !== -1) {
+        state.threads[threadIndex] = action.payload;
+      }
+      state.streaming = false;
+      state.streamingContent = '';
+    },
+    setStreamError: (state, action) => {
+      state.error = action.payload;
+      state.streaming = false;
+      state.streamingContent = '';
+    }
   },
   extraReducers: (builder) => {
     builder
@@ -163,5 +187,12 @@ const chatSlice = createSlice({
   },
 });
 
-export const { setCurrentThread, updateThread } = chatSlice.actions;
+export const { 
+  setCurrentThread, 
+  updateThread, 
+  startStreaming, 
+  appendStreamContent, 
+  updateStreamingThread,
+  setStreamError 
+} = chatSlice.actions;
 export default chatSlice.reducer; 

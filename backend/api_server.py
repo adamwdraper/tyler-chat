@@ -389,6 +389,104 @@ async def search_threads_by_source(
     """Search threads by source name and properties"""
     return await thread_store.find_by_source(source_name, properties)
 
+def serialize_message(message):
+    """Convert a Message object to a dictionary."""
+    # Helper function to convert datetime objects to ISO format strings
+    def convert_datetime(obj):
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        return obj
+
+    # Convert metrics timestamps if they exist
+    metrics = message.metrics or {}
+    if 'timing' in metrics:
+        timing = metrics['timing']
+        if 'started_at' in timing:
+            timing['started_at'] = convert_datetime(timing['started_at'])
+        if 'ended_at' in timing:
+            timing['ended_at'] = convert_datetime(timing['ended_at'])
+
+    return {
+        "id": message.id,
+        "role": message.role,
+        "content": message.content,
+        "name": message.name,
+        "tool_call_id": message.tool_call_id,
+        "tool_calls": message.tool_calls,
+        "attributes": message.attributes,
+        "source": message.source,
+        "attachments": [
+            {
+                "filename": attachment.filename,
+                "mime_type": attachment.mime_type,
+                "url": attachment.get_url() if hasattr(attachment, 'get_url') else None
+            } for attachment in message.attachments
+        ],
+        "sequence": message.sequence,
+        "timestamp": convert_datetime(message.timestamp) if message.timestamp else None,
+        "metrics": metrics
+    }
+
+@app.websocket("/ws/threads/{thread_id}/stream")
+async def stream_chat(websocket: WebSocket, thread_id: str):
+    """Stream chat responses for a thread"""
+    await websocket.accept()
+    try:
+        thread = await thread_store.get(thread_id)
+        if not thread:
+            await websocket.send_json({"type": "error", "data": "Thread not found"})
+            return
+
+        # Process thread with streaming
+        async for update in agent.go_stream(thread):
+            if update.type == update.Type.CONTENT_CHUNK:
+                await websocket.send_json({
+                    "type": "content_chunk",
+                    "data": update.data
+                })
+            elif update.type == update.Type.ASSISTANT_MESSAGE:
+                await websocket.send_json({
+                    "type": "assistant_message",
+                    "data": serialize_message(update.data)
+                })
+            elif update.type == update.Type.TOOL_MESSAGE:
+                await websocket.send_json({
+                    "type": "tool_message",
+                    "data": serialize_message(update.data)
+                })
+            elif update.type == update.Type.ERROR:
+                await websocket.send_json({
+                    "type": "error",
+                    "data": update.data
+                })
+            elif update.type == update.Type.COMPLETE:
+                thread, new_messages = update.data
+                await websocket.send_json({
+                    "type": "complete",
+                    "data": {
+                        "thread": thread.to_dict(),
+                        "new_messages": [serialize_message(m) for m in new_messages]
+                    }
+                })
+
+                # Check if we should generate a title
+                if thread.title == "New Chat" and not thread.attributes.get("title_generated"):
+                    if any(m.role == "assistant" for m in thread.messages):
+                        # Generate title in background
+                        asyncio.create_task(generate_and_save_title(thread_id, thread_store, manager))
+
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        logger.error(f"Error in stream_chat: {e}")
+        try:
+            await websocket.send_json({
+                "type": "error",
+                "data": str(e)
+            })
+        except:
+            pass
+
 if __name__ == "__main__":
     uvicorn.run(
         "api_server:app",

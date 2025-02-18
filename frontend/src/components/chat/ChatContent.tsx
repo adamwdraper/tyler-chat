@@ -46,7 +46,7 @@ import {
   IconBug,
 } from '@tabler/icons-react';
 import { useSelector } from 'react-redux';
-import { addMessage, processThread, createThread, updateThread, deleteThread, setCurrentThread } from '@/store/chat/ChatSlice';
+import { addMessage, processThread, createThread, updateThread, deleteThread, setCurrentThread, startStreaming, appendStreamContent, updateStreamingThread, setStreamError } from '@/store/chat/ChatSlice';
 import { RootState } from '@/store/Store';
 import { Message, Thread, ToolCall, TextContent, ImageContent, MessageCreate, MessageAttachment } from '@/types/chat';
 import Scrollbar from '@/components/custom-scroll/Scrollbar';
@@ -135,8 +135,9 @@ const ChatContent: React.FC = () => {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const open = Boolean(anchorEl);
   
-  const { threads, currentThread } = useSelector((state: RootState) => state.chat);
+  const { threads, currentThread, streaming, streamingContent } = useSelector((state: RootState) => state.chat);
   const activeThread = threads.find((t: Thread) => t.id === currentThread);
+  const streamWsRef = useRef<WebSocket>();
 
   // Only sync from URL to Redux when there's a thread ID
   useEffect(() => {
@@ -183,31 +184,46 @@ const ChatContent: React.FC = () => {
   useEffect(() => {
     if (currentThread && activeThread?.title === 'New Chat') {
       // Connect to WebSocket for this thread
-      const ws = new WebSocket(`ws://localhost:8000/ws/threads/${currentThread}`);
+      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const apiUrl = process.env.VITE_API_URL || 'http://localhost:8000';
+      const wsHost = apiUrl.replace(/^https?:\/\//, '');
       
-      ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        if (data.type === 'title_update' && data.thread_id === currentThread) {
-          setIsNewTitle(true);
-          dispatch(updateThread(data.thread));
-          // Reset the animation flag after animation duration
-          setTimeout(() => setIsNewTitle(false), 2000);
-        }
-      };
+      let ws: WebSocket | null = null;
+      try {
+        ws = new WebSocket(`${wsProtocol}//${wsHost}/ws/threads/${currentThread}`);
+        
+        ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.type === 'title_update' && data.thread_id === currentThread) {
+              setIsNewTitle(true);
+              dispatch(updateThread(data.thread));
+              // Reset the animation flag after animation duration
+              setTimeout(() => setIsNewTitle(false), 2000);
+            }
+          } catch (error) {
+            console.error('Error parsing WebSocket message:', error);
+          }
+        };
 
-      ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
-      };
+        ws.onerror = (error) => {
+          console.error('WebSocket error:', error);
+        };
 
-      wsRef.current = ws;
+        wsRef.current = ws;
+      } catch (error) {
+        console.error('Error creating WebSocket connection:', error);
+      }
 
       // Cleanup on unmount or when thread changes
       return () => {
-        ws.close();
+        if (ws) {
+          ws.close();
+        }
         wsRef.current = undefined;
       };
     }
-  }, [currentThread, activeThread?.title]);
+  }, [currentThread, activeThread?.title, dispatch]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -353,6 +369,7 @@ const ChatContent: React.FC = () => {
     if (!threadId) return;
 
     setIsProcessing(true);
+    dispatch(startStreaming());
     
     try {
       // Create message with file attachments
@@ -370,18 +387,75 @@ const ChatContent: React.FC = () => {
         attachments: fileAttachments
       };
 
-      // Add message and process in one call
+      // First add the user message without processing
       await dispatch(addMessage({
         threadId,
         message: messageCreate,
-        process: true
+        process: false
       })).unwrap();
+
+      // Then start streaming
+      if (streamWsRef.current?.readyState === WebSocket.OPEN) {
+        streamWsRef.current.close();
+      }
+
+      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const apiUrl = process.env.VITE_API_URL || 'http://localhost:8000';
+      const wsHost = apiUrl.replace(/^https?:\/\//, '');
+      
+      let ws: WebSocket | null = null;
+      try {
+        ws = new WebSocket(`${wsProtocol}//${wsHost}/ws/threads/${threadId}/stream`);
+        
+        ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            switch (data.type) {
+              case 'content_chunk':
+                dispatch(appendStreamContent(data.data));
+                break;
+              case 'assistant_message':
+              case 'tool_message':
+                // These are handled by the complete message
+                break;
+              case 'complete':
+                dispatch(updateStreamingThread(data.data.thread));
+                setIsProcessing(false);
+                break;
+              case 'error':
+                dispatch(setStreamError(data.data));
+                setIsProcessing(false);
+                break;
+            }
+          } catch (error) {
+            console.error('Error parsing WebSocket message:', error);
+            dispatch(setStreamError('Error processing response'));
+            setIsProcessing(false);
+          }
+        };
+
+        ws.onerror = (error) => {
+          console.error('WebSocket error:', error);
+          dispatch(setStreamError('WebSocket error occurred'));
+          setIsProcessing(false);
+        };
+
+        ws.onclose = () => {
+          streamWsRef.current = undefined;
+        };
+
+        streamWsRef.current = ws;
+      } catch (error) {
+        console.error('Error creating WebSocket connection:', error);
+        dispatch(setStreamError('Failed to establish WebSocket connection'));
+        setIsProcessing(false);
+      }
 
       setNewMessage('');
       setAttachments([]); // Clear attachments after sending
     } catch (error) {
       console.error('Error sending message:', error);
-    } finally {
+      dispatch(setStreamError('Failed to send message'));
       setIsProcessing(false);
     }
   };
@@ -719,10 +793,10 @@ const ChatContent: React.FC = () => {
   // Static components defined outside of ChatMessage
   const MessageMetrics = React.memo(({ metrics }: { metrics: Message['metrics'] }) => (
     <>
-      {metrics?.weave_call?.ui_url && (
+      {metrics?.weave_call?.id && (
         <Tooltip title="View trace in Weave" arrow placement="top">
           <Link
-            href={metrics.weave_call.ui_url}
+            href={`/weave/${metrics.weave_call.id}`}
             target="_blank"
             rel="noopener noreferrer"
             sx={{ 
@@ -1688,6 +1762,45 @@ const ChatContent: React.FC = () => {
     });
   };
 
+  // Add streaming message to sorted messages if streaming
+  const displayMessages = React.useMemo(() => {
+    if (!streaming || !streamingContent) {
+      return sortedMessages;
+    }
+
+    const streamingMessage: Message = {
+      id: 'streaming',
+      role: 'assistant',
+      content: streamingContent,
+      sequence: Number.MAX_SAFE_INTEGER,
+      timestamp: new Date().toISOString(),
+      attributes: {},
+      attachments: [],
+      metrics: {
+        model: null,
+        timing: {
+          started_at: null,
+          ended_at: null,
+          latency: 0
+        },
+        usage: {
+          completion_tokens: 0,
+          prompt_tokens: 0,
+          total_tokens: 0
+        },
+        weave_call: {
+          id: '',
+          trace_id: '',
+          project_id: '',
+          request_id: ''
+        }
+      },
+      source: undefined
+    };
+
+    return [...sortedMessages, streamingMessage];
+  }, [sortedMessages, streaming, streamingContent]);
+
   return (
     <Box
       sx={{
@@ -1899,8 +2012,8 @@ const ChatContent: React.FC = () => {
                 },
               }}
             >
-              {sortedMessages.map((message, index) => 
-                renderMessage(message, index, sortedMessages)
+              {displayMessages.map((message, index) => 
+                renderMessage(message, index, displayMessages)
               )}
               {isProcessing && renderLoadingMessage()}
               {!activeThread && !isProcessing && (
