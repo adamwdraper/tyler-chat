@@ -1092,7 +1092,8 @@ const ChatContent: React.FC = () => {
                       sx={{
                         position: 'relative',
                         maxHeight: isSystemMessage ? 'none' : (isExpanded ? 'none' : maxHeight),
-                        overflow: 'hidden'
+                        overflow: 'hidden',
+                        mb: message.attachments && message.attachments.length > 0 ? 2 : 0
                       }}
                     >
                       <Box
@@ -1135,7 +1136,7 @@ const ChatContent: React.FC = () => {
                       >
                         {renderContent(message.content, message.role, message, messages)}
                       </Box>
-                      {!isSystemMessage && isExpanded && shouldShowExpand && (
+                      {!isSystemMessage && !isExpanded && shouldShowExpand && (
                         <Box
                           sx={{
                             position: 'absolute',
@@ -1149,7 +1150,8 @@ const ChatContent: React.FC = () => {
                             display: 'flex',
                             alignItems: 'flex-end',
                             justifyContent: 'center',
-                            pt: 4
+                            pt: 4,
+                            zIndex: 1
                           }}
                         >
                           <Button
@@ -1165,7 +1167,7 @@ const ChatContent: React.FC = () => {
                       )}
                     </Box>
                     {!isSystemMessage && isExpanded && shouldShowExpand && (
-                      <Box sx={{ textAlign: 'center', mt: 1 }}>
+                      <Box sx={{ textAlign: 'center', mt: 1, mb: message.attachments && message.attachments.length > 0 ? 2 : 0 }}>
                         <Button
                           size="small"
                           variant="text"
