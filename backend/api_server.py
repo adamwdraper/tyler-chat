@@ -136,7 +136,11 @@ agent = Agent(
     model_name="gpt-4o",
     purpose="To help with general questions",
     tools=[
-        "web"
+        "web",
+        "slack",
+        "notion",
+        "command_line",
+        "image"
     ],
     thread_store=thread_store
 )
