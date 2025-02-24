@@ -134,6 +134,7 @@ const ChatContent: React.FC = () => {
   const [selectedAttachment, setSelectedAttachment] = useState<MessageAttachment | null>(null);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const open = Boolean(anchorEl);
+  const [isRawView, setIsRawView] = useState(false);
   
   const { threads, currentThread } = useSelector((state: RootState) => state.chat);
   const activeThread = threads.find((t: Thread) => t.id === currentThread);
@@ -849,6 +850,7 @@ const ChatContent: React.FC = () => {
     messages,
     toggleSystemMessage,
     expandedSystemMessages,
+    isRawView,
   }: {
     message: Message;
     isLastMessage: boolean;
@@ -862,6 +864,7 @@ const ChatContent: React.FC = () => {
     messages: Message[];
     toggleSystemMessage: (messageId: string) => void;
     expandedSystemMessages: Set<string>;
+    isRawView: boolean;
   }) => {
     const [isHovered, setIsHovered] = React.useState(false);
     const [isCopied, setIsCopied] = React.useState(false);
@@ -898,6 +901,96 @@ const ChatContent: React.FC = () => {
         contentRefs.current.set(message.id, el);
       }
     }, [message.id, contentRefs]);
+
+    // Raw view rendering
+    if (isRawView) {
+      return (
+        <Box 
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+        >
+          <Box p={3} sx={{ display: 'flex', justifyContent: 'center' }}>
+            <Box sx={{ width: '100%', maxWidth: 900 }}>
+              <Stack direction="row" gap="16px" mb={2}>
+                <Avatar
+                  sx={{
+                    bgcolor: getMessageColor(message.role),
+                    width: 40,
+                    height: 40,
+                    color: 'white',
+                    alignSelf: 'flex-start'
+                  }}
+                >
+                  {getMessageIcon(message.role)}
+                </Avatar>
+                <Box sx={{ flex: 1 }}>
+                  <Box
+                    component="pre"
+                    sx={{
+                      m: 0,
+                      p: 2,
+                      borderRadius: 1,
+                      bgcolor: theme => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
+                      border: 1,
+                      borderColor: theme => theme.palette.mode === 'dark' ? 'grey.700' : 'grey.200',
+                      fontFamily: 'monospace',
+                      fontSize: '0.875rem',
+                      overflow: 'auto',
+                      whiteSpace: 'pre-wrap',
+                      wordWrap: 'break-word'
+                    }}
+                  >
+                    <Box component="code">
+                      {JSON.stringify(message, null, 2)}
+                    </Box>
+                  </Box>
+                  {/* Footer with metrics and timestamp */}
+                  <Box 
+                    sx={{ 
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      mt: 1,
+                      gap: 2,
+                      color: 'text.secondary',
+                      typography: 'caption',
+                      height: 28
+                    }}
+                  >
+                    <Box sx={{ 
+                      display: 'flex', 
+                      gap: 2, 
+                      alignItems: 'center', 
+                      minWidth: 80,
+                      height: '100%'
+                    }}>
+                      <MessageHoverActions 
+                        isHovered={isHovered}
+                        isCopied={isCopied}
+                        isToolRelated={isToolRelated}
+                        isPlainText={isPlainText}
+                        onCopy={handleCopyMessage}
+                        onToggleFormat={() => toggleMessageFormat(message.id)}
+                      />
+                    </Box>
+                    <Box sx={{ 
+                      display: 'flex', 
+                      gap: 2, 
+                      alignItems: 'center',
+                      height: '100%'
+                    }}>
+                      {message.metrics && <MessageMetrics metrics={message.metrics} />}
+                      <MessageTimeAgo timestamp={message.timestamp} />
+                    </Box>
+                  </Box>
+                </Box>
+              </Stack>
+            </Box>
+          </Box>
+          {!isLastMessage && <Divider />}
+        </Box>
+      );
+    }
 
     // Special render for collapsed system message
     if (isSystemMessage && !isSystemExpanded) {
@@ -971,7 +1064,7 @@ const ChatContent: React.FC = () => {
                     alignItems="center" 
                     sx={{ 
                       mb: 1, 
-                      cursor: 'pointer',
+                      cursor: 'pointer', 
                       color: 'text.secondary',
                       justifyContent: 'space-between',
                       '&:hover': {
@@ -1035,7 +1128,7 @@ const ChatContent: React.FC = () => {
                       >
                         {renderContent(message.content, message.role, message, messages)}
                       </Box>
-                      {!isSystemMessage && !isExpanded && shouldShowExpand && (
+                      {!isSystemMessage && isExpanded && shouldShowExpand && (
                         <Box
                           sx={{
                             position: 'absolute',
@@ -1213,7 +1306,7 @@ const ChatContent: React.FC = () => {
                     gap: 2,
                     color: 'text.secondary',
                     typography: 'caption',
-                    height: 28, // Explicit height to prevent jumping
+                    height: 28
                   }}
                 >
                   <Box sx={{ 
@@ -1221,7 +1314,7 @@ const ChatContent: React.FC = () => {
                     gap: 2, 
                     alignItems: 'center', 
                     minWidth: 80,
-                    height: '100%', // Match parent height
+                    height: '100%'
                   }}>
                     <MessageHoverActions 
                       isHovered={isHovered}
@@ -1236,7 +1329,7 @@ const ChatContent: React.FC = () => {
                     display: 'flex', 
                     gap: 2, 
                     alignItems: 'center',
-                    height: '100%', // Match parent height
+                    height: '100%'
                   }}>
                     {message.metrics && <MessageMetrics metrics={message.metrics} />}
                     <MessageTimeAgo timestamp={message.timestamp} />
@@ -1282,6 +1375,7 @@ const ChatContent: React.FC = () => {
         messages={messages}
         toggleSystemMessage={toggleSystemMessage}
         expandedSystemMessages={expandedSystemMessages}
+        isRawView={isRawView}
       />
     );
   };
@@ -1849,41 +1943,34 @@ const ChatContent: React.FC = () => {
               </Typography>
             </Stack>
           </Stack>
-          <IconButton 
-            onClick={handleMenuClick}
-            size="small"
-            sx={{
-              color: 'text.secondary',
-              '&:hover': {
-                color: 'text.primary',
-              },
-            }}
-          >
-            <IconDotsVertical size={20} />
-          </IconButton>
-          <Menu
-            anchorEl={anchorEl}
-            open={open}
-            onClose={handleMenuClose}
-            anchorOrigin={{
-              vertical: 'bottom',
-              horizontal: 'right',
-            }}
-            transformOrigin={{
-              vertical: 'top',
-              horizontal: 'right',
-            }}
-          >
-            <MenuItem 
-              onClick={handleDeleteClick}
-              sx={{ 
-                gap: 1
+          <Stack direction="row" spacing={1} alignItems="center">
+            <Tooltip title={isRawView ? "Switch to formatted view" : "Switch to raw view"}>
+              <IconButton
+                size="small"
+                onClick={() => setIsRawView(!isRawView)}
+                sx={{
+                  color: isRawView ? 'primary.main' : 'text.secondary',
+                  '&:hover': {
+                    color: 'primary.main'
+                  }
+                }}
+              >
+                {isRawView ? <IconAbc size={20} /> : <IconCode size={20} />}
+              </IconButton>
+            </Tooltip>
+            <IconButton
+              size="small"
+              onClick={handleMenuClick}
+              sx={{
+                color: 'text.secondary',
+                '&:hover': {
+                  color: 'primary.main'
+                }
               }}
             >
-              <IconTrash size={18} style={{ color: theme.palette.error.main }} />
-              Delete
-            </MenuItem>
-          </Menu>
+              <IconDotsVertical size={20} />
+            </IconButton>
+          </Stack>
         </Box>
       )}
       <Box sx={{ flexGrow: 1, position: 'relative', overflow: 'hidden' }}>
@@ -2053,6 +2140,29 @@ const ChatContent: React.FC = () => {
         </Stack>
       </Box>
       <FilePreviewModal />
+      <Menu
+        anchorEl={anchorEl}
+        open={open}
+        onClose={handleMenuClose}
+        anchorOrigin={{
+          vertical: 'bottom',
+          horizontal: 'right',
+        }}
+        transformOrigin={{
+          vertical: 'top',
+          horizontal: 'right',
+        }}
+      >
+        <MenuItem 
+          onClick={handleDeleteClick}
+          sx={{ 
+            gap: 1
+          }}
+        >
+          <IconTrash size={18} style={{ color: theme.palette.error.main }} />
+          Delete
+        </MenuItem>
+      </Menu>
     </Box>
   );
 };
