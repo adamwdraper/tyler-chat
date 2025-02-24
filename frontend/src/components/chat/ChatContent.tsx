@@ -705,15 +705,22 @@ const ChatContent: React.FC = () => {
 
   const getImageUrl = (content: any, mimeType?: string): string | null | undefined => {
     if (!content) return undefined;
+    
+    // Check for URL in processed_content
+    if (content.url) return content.url;
+    
+    // Check for base64 content
     if (typeof content === 'string') {
       return content.startsWith('data:') 
         ? content 
         : `data:${mimeType || 'image/*'};base64,${content}`;
     }
+    
+    // Check for content field with base64 data
     if (content.content) {
       return `data:${content.mime_type || mimeType || 'image/*'};base64,${content.content}`;
     }
-    if (content.url) return content.url;
+    
     return undefined;
   };
 
@@ -1214,7 +1221,13 @@ const ChatContent: React.FC = () => {
                   <Box sx={{ mt: 2 }}>
                     <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
                       {message.attachments.map((attachment, index) => {
-                        const imageUrl = getImageUrl(attachment.processed_content, attachment.mime_type);
+                        // First check for storage_path
+                        let imageUrl = attachment.storage_path ? `/files/${attachment.storage_path}` : null;
+                        
+                        // If no storage_path, try to get URL from processed_content
+                        if (!imageUrl) {
+                          imageUrl = getImageUrl(attachment.processed_content, attachment.mime_type);
+                        }
                         
                         if (typeof attachment.mime_type === 'string' && attachment.mime_type.startsWith('image/')) {
                           return (
@@ -1355,8 +1368,8 @@ const ChatContent: React.FC = () => {
   });
 
   const renderMessage = (message: Message, index: number, messages: Message[]) => {
-    // Skip tool responses as they'll be rendered with their calls
-    if (message.role === 'tool' && !message.tool_call_id) {
+    // Skip tool responses as they'll be rendered with their calls, unless they have attachments
+    if (message.role === 'tool' && !message.tool_call_id && (!message.attachments || message.attachments.length === 0)) {
       return null;
     }
 
@@ -1504,6 +1517,11 @@ const ChatContent: React.FC = () => {
     if (!selectedAttachment) return null;
 
     const getFileUrl = (attachment: typeof selectedAttachment) => {
+      // First check for storage_path for all file types
+      if (attachment.storage_path) {
+        return `/files/${attachment.storage_path}`;
+      }
+      
       const isImage = typeof attachment.mime_type === 'string' && attachment.mime_type.indexOf('image/') === 0;
       
       if (isImage) {
@@ -1511,9 +1529,6 @@ const ChatContent: React.FC = () => {
       }
       
       // For non-image files, use the existing logic
-      if (attachment.storage_path) {
-        return `/files/${attachment.storage_path}`;
-      }
       if (attachment.processed_content?.url) {
         return attachment.processed_content.url;
       }
