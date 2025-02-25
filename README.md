@@ -34,6 +34,24 @@ A FastAPI server that manages:
 - **Database Storage**: PostgreSQL for persistent data
 - **API Documentation**: Auto-generated OpenAPI docs
 
+## Version Compatibility
+
+Tyler Chat includes version information to help track compatibility with the Tyler agent package:
+
+- The current Tyler Chat version is displayed in the UI at the bottom of the sidebar
+- It shows both the Tyler Chat version and the compatible Tyler agent version
+- The frontend is the single source of truth for version information
+
+### Updating Version Information
+
+To update the version compatibility information:
+
+1. Edit `frontend/src/utils/version.ts` - this is the ONLY file you need to update
+2. Update the `TYLER_CHAT_VERSION` constant when making significant changes to the chat interface itself
+3. Update the `TYLER_COMPATIBLE_VERSION` constant to match the tested Tyler agent version
+
+The version information is automatically propagated from the frontend to the backend via API calls, ensuring consistency across the application. This approach means you only need to update version information in one place.
+
 ## Setup and Installation
 
 ### Prerequisites
