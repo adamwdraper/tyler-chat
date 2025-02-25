@@ -159,7 +159,9 @@ agent = Agent(
         "notion",
         "command_line",
         "image",
-        "audio"
+        "audio",
+        "files",
+        "documents"
     ],
     thread_store=thread_store
 )
