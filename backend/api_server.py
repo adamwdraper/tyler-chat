@@ -158,7 +158,8 @@ agent = Agent(
         "slack",
         "notion",
         "command_line",
-        "image"
+        "image",
+        "audio"
     ],
     thread_store=thread_store
 )

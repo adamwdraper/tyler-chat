@@ -44,6 +44,10 @@ import {
   IconX,
   IconDotsVertical,
   IconBug,
+  IconPlayerPlay,
+  IconPlayerPause,
+  IconVolume,
+  IconVolumeOff,
 } from '@tabler/icons-react';
 import { useSelector } from 'react-redux';
 import { addMessage, processThread, createThread, updateThread, deleteThread, setCurrentThread } from '@/store/chat/ChatSlice';
@@ -104,6 +108,150 @@ const TypingDots: React.FC = () => {
         />
       ))}
     </Stack>
+  );
+};
+
+const AudioPlayer: React.FC<{ src: string, filename: string }> = ({ src, filename }) => {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [volume, setVolume] = useState(1);
+  const [isMuted, setIsMuted] = useState(false);
+  const audioRef = useRef<HTMLAudioElement>(null);
+
+  const handlePlayPause = () => {
+    if (audioRef.current) {
+      if (isPlaying) {
+        audioRef.current.pause();
+      } else {
+        audioRef.current.play();
+      }
+      setIsPlaying(!isPlaying);
+    }
+  };
+
+  const handleTimeUpdate = () => {
+    if (audioRef.current) {
+      setCurrentTime(audioRef.current.currentTime);
+    }
+  };
+
+  const handleLoadedMetadata = () => {
+    if (audioRef.current) {
+      setDuration(audioRef.current.duration);
+    }
+  };
+
+  const handleVolumeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const newVolume = parseFloat(event.target.value);
+    setVolume(newVolume);
+    if (audioRef.current) {
+      audioRef.current.volume = newVolume;
+    }
+    setIsMuted(newVolume === 0);
+  };
+
+  const handleMuteToggle = () => {
+    if (audioRef.current) {
+      if (isMuted) {
+        audioRef.current.volume = volume || 1;
+        setIsMuted(false);
+      } else {
+        audioRef.current.volume = 0;
+        setIsMuted(true);
+      }
+    }
+  };
+
+  const handleSeek = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const seekTime = parseFloat(event.target.value);
+    setCurrentTime(seekTime);
+    if (audioRef.current) {
+      audioRef.current.currentTime = seekTime;
+    }
+  };
+
+  const formatTime = (time: number) => {
+    const minutes = Math.floor(time / 60);
+    const seconds = Math.floor(time % 60);
+    return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+  };
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (audio) {
+      const handleEnded = () => setIsPlaying(false);
+      audio.addEventListener('ended', handleEnded);
+      return () => {
+        audio.removeEventListener('ended', handleEnded);
+      };
+    }
+  }, []);
+
+  return (
+    <Box sx={{ 
+      width: '100%',
+      borderRadius: 1,
+      border: 1,
+      borderColor: 'divider',
+      p: 2,
+      bgcolor: theme => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
+    }}>
+      <audio 
+        ref={audioRef} 
+        src={src} 
+        onTimeUpdate={handleTimeUpdate}
+        onLoadedMetadata={handleLoadedMetadata}
+        style={{ display: 'none' }}
+      />
+      <Stack spacing={1}>
+        <Typography variant="subtitle2" noWrap title={filename}>
+          {filename}
+        </Typography>
+        <Stack direction="row" spacing={1} alignItems="center">
+          <IconButton 
+            onClick={handlePlayPause} 
+            size="small"
+            color="primary"
+          >
+            {isPlaying ? <IconPlayerPause size={20} /> : <IconPlayerPlay size={20} />}
+          </IconButton>
+          <Typography variant="caption" sx={{ minWidth: 45 }}>
+            {formatTime(currentTime)}
+          </Typography>
+          <Box sx={{ flex: 1 }}>
+            <input
+              type="range"
+              min={0}
+              max={duration || 0}
+              value={currentTime}
+              onChange={handleSeek}
+              style={{ width: '100%' }}
+            />
+          </Box>
+          <Typography variant="caption" sx={{ minWidth: 45 }}>
+            {formatTime(duration)}
+          </Typography>
+          <IconButton 
+            onClick={handleMuteToggle} 
+            size="small"
+          >
+            {isMuted ? <IconVolumeOff size={18} /> : <IconVolume size={18} />}
+          </IconButton>
+          <Box sx={{ width: 60 }}>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.1}
+              value={isMuted ? 0 : volume}
+              onChange={handleVolumeChange}
+              style={{ width: '100%' }}
+            />
+          </Box>
+        </Stack>
+      </Stack>
+    </Box>
   );
 };
 
@@ -248,6 +396,17 @@ const ChatContent: React.FC = () => {
     'application/zip',
     'application/x-tar',
     'application/gzip',
+    // Audio files
+    'audio/mpeg',
+    'audio/mp3',
+    'audio/mp4',
+    'audio/opus',
+    'audio/ogg',
+    'audio/wav',
+    'audio/webm',
+    'audio/aac',
+    'audio/flac',
+    'audio/x-m4a',
   ]);
 
   // Add validation helper
@@ -1224,13 +1383,25 @@ const ChatContent: React.FC = () => {
                     <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
                       {message.attachments.map((attachment, index) => {
                         // First check for storage_path
-                        let imageUrl = attachment.storage_path ? `/files/${attachment.storage_path}` : null;
+                        let fileUrl = attachment.storage_path ? `/files/${attachment.storage_path}` : null;
                         
                         // If no storage_path, try to get URL from processed_content
-                        if (!imageUrl) {
-                          imageUrl = getImageUrl(attachment.processed_content, attachment.mime_type);
+                        if (!fileUrl) {
+                          if (typeof attachment.mime_type === 'string' && attachment.mime_type.startsWith('image/')) {
+                            fileUrl = getImageUrl(attachment.processed_content, attachment.mime_type);
+                          } else {
+                            // For non-image files, use the existing logic
+                            if (attachment.processed_content?.url) {
+                              fileUrl = attachment.processed_content.url;
+                            } else if (attachment.processed_content?.content) {
+                              fileUrl = `data:${attachment.mime_type || 'application/octet-stream'};base64,${attachment.processed_content.content}`;
+                            } else if (attachment.content) {
+                              fileUrl = `data:${attachment.mime_type || 'application/octet-stream'};base64,${attachment.content}`;
+                            }
+                          }
                         }
                         
+                        // Handle image attachments
                         if (typeof attachment.mime_type === 'string' && attachment.mime_type.startsWith('image/')) {
                           return (
                             <Box 
@@ -1249,7 +1420,7 @@ const ChatContent: React.FC = () => {
                               }}
                               onClick={() => handleAttachmentClick(attachment)}
                             >
-                              {imageUrl ? (
+                              {fileUrl ? (
                                 <Box sx={{ 
                                   height: '100%', 
                                   display: 'flex', 
@@ -1257,7 +1428,7 @@ const ChatContent: React.FC = () => {
                                   justifyContent: 'center'
                                 }}>
                                   <img 
-                                    src={imageUrl}
+                                    src={fileUrl}
                                     alt={attachment.filename}
                                     style={{ 
                                       maxWidth: '100%',
@@ -1269,7 +1440,7 @@ const ChatContent: React.FC = () => {
                                     }}
                                     onError={(e) => {
                                       console.error('Image failed to load:', {
-                                        src: imageUrl,
+                                        src: fileUrl,
                                         error: e
                                       });
                                     }}
@@ -1286,6 +1457,34 @@ const ChatContent: React.FC = () => {
                           );
                         }
                         
+                        // Handle audio attachments
+                        if (typeof attachment.mime_type === 'string' && attachment.mime_type.startsWith('audio/')) {
+                          return (
+                            <Box 
+                              key={index}
+                              sx={{ 
+                                width: '100%',
+                                overflow: 'hidden',
+                                borderRadius: 1,
+                              }}
+                            >
+                              {fileUrl ? (
+                                <AudioPlayer 
+                                  src={fileUrl} 
+                                  filename={attachment.filename} 
+                                />
+                              ) : (
+                                <Box sx={{ p: 2, textAlign: 'center', border: 1, borderColor: 'divider', borderRadius: 1 }}>
+                                  <Typography variant="body2" color="text.secondary">
+                                    Processing audio...
+                                  </Typography>
+                                </Box>
+                              )}
+                            </Box>
+                          );
+                        }
+                        
+                        // Handle all other file types
                         return (
                           <Chip
                             key={index}
@@ -1584,6 +1783,37 @@ const ChatContent: React.FC = () => {
                 title={selectedAttachment.filename}
               />
             </object>
+          </Box>
+        );
+      }
+
+      // Handle audio files
+      if (selectedAttachment.mime_type?.startsWith('audio/')) {
+        return (
+          <Box sx={{ 
+            height: '100%', 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center',
+            p: 3
+          }}>
+            <Box sx={{ width: '100%', maxWidth: 600 }}>
+              <AudioPlayer 
+                src={fileUrl} 
+                filename={selectedAttachment.filename} 
+              />
+              <Box sx={{ mt: 4, textAlign: 'center' }}>
+                <Button
+                  variant="outlined"
+                  color="primary"
+                  href={fileUrl}
+                  download={selectedAttachment.filename}
+                  startIcon={<IconPaperclip size={20} />}
+                >
+                  Download {selectedAttachment.filename}
+                </Button>
+              </Box>
+            </Box>
           </Box>
         );
       }
