@@ -17,6 +17,7 @@ import logging
 from sqlalchemy.orm import selectinload
 from sqlalchemy import select
 from contextlib import asynccontextmanager
+import importlib.metadata
 
 from tyler.models.thread import Thread
 from tyler.models.message import Message, Attachment
@@ -28,6 +29,17 @@ logger = logging.getLogger(__name__)
 
 # Load environment variables from .env file
 load_dotenv()
+
+# Define the expected Tyler version
+EXPECTED_TYLER_VERSION = "0.3.1"  # Update this when testing with new Tyler versions
+
+# Check Tyler version
+try:
+    installed_tyler_version = importlib.metadata.version("tyler-agent")
+    if installed_tyler_version != EXPECTED_TYLER_VERSION:
+        logger.warning(f"Warning: Installed Tyler version ({installed_tyler_version}) does not match expected version ({EXPECTED_TYLER_VERSION})")
+except Exception as e:
+    logger.warning(f"Failed to check Tyler version: {e}")
 
 # Initialize weave for tracing (optional - requires WANDB_API_KEY environment variable)
 try:
@@ -69,6 +81,12 @@ class ThreadCreate(BaseModel):
 class ThreadUpdate(BaseModel):
     title: Optional[str] = None
     attributes: Optional[Dict[str, Any]] = None
+
+class VersionInfo(BaseModel):
+    tyler_chat_version: str  # Will be provided by the frontend
+    expected_tyler_version: str  # Will be provided by the frontend or use EXPECTED_TYLER_VERSION
+    installed_tyler_version: Optional[str] = None
+    is_compatible: bool = False
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -136,7 +154,14 @@ agent = Agent(
     model_name="gpt-4o",
     purpose="To help with general questions",
     tools=[
-        "web"
+        "web",
+        "slack",
+        "notion",
+        "command_line",
+        "image",
+        "audio",
+        "files",
+        "documents"
     ],
     thread_store=thread_store
 )
@@ -388,6 +413,36 @@ async def search_threads_by_source(
 ):
     """Search threads by source name and properties"""
     return await thread_store.find_by_source(source_name, properties)
+
+@app.get("/version", response_model=VersionInfo)
+async def get_version_info(
+    frontend_version: Optional[str] = None,
+    compatible_version: Optional[str] = None
+):
+    """
+    Get version information about the Tyler Chat and Tyler agent.
+    
+    The frontend version and compatible version can be provided as query parameters.
+    If provided, these values will be used instead of the hardcoded values.
+    This makes the frontend the single source of truth for version information.
+    """
+    try:
+        installed_version = importlib.metadata.version("tyler-agent")
+        # Use the compatible_version from the frontend if provided
+        expected_version = compatible_version or EXPECTED_TYLER_VERSION
+        is_compatible = installed_version == expected_version
+    except Exception:
+        installed_version = None
+        is_compatible = False
+    
+    return VersionInfo(
+        # Use the frontend_version if provided, otherwise use the hardcoded value
+        tyler_chat_version=frontend_version or "0.3.1",
+        # Use the compatible_version if provided, otherwise use the hardcoded value
+        expected_tyler_version=compatible_version or EXPECTED_TYLER_VERSION,
+        installed_tyler_version=installed_version,
+        is_compatible=is_compatible
+    )
 
 if __name__ == "__main__":
     uvicorn.run(

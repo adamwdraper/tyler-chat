@@ -23,9 +23,7 @@ export interface TextContent {
 
 export interface WeaveCall {
   id: string;
-  trace_id: string;
-  project_id: string;
-  request_id: string;
+  ui_url: string;
 }
 
 export interface MessageMetrics {
@@ -66,6 +64,7 @@ export interface Attachment {
   file_id?: string;  // Reference to stored file
   storage_path?: string;  // Path in storage backend
   storage_backend?: string;  // Storage backend type
+  status?: "pending" | "stored" | "failed";
 }
 
 export interface MessageAttachment extends Attachment {
@@ -128,6 +127,9 @@ export interface Thread {
     tools: Record<string, number>;
     total_calls: number;
   };
+  get_system_message(): Message | null;
+  get_messages_in_sequence(): Message[];
+  ensure_system_prompt(prompt: string): void;
 }
 
 export interface ThreadCreate {
@@ -139,7 +141,12 @@ export interface ThreadCreate {
     completion_tokens?: number;
     prompt_tokens?: number;
     total_tokens?: number;
-    model_usage?: Record<string, any>;
+    model_usage?: Record<string, {
+      calls: number;
+      completion_tokens: number;
+      prompt_tokens: number;
+      total_tokens: number;
+    }>;
   };
 }
 

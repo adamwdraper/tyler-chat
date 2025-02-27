@@ -27,12 +27,60 @@ A FastAPI server that manages:
 ### Key Features
 
 - **Real-time Chat**: WebSocket-based communication for instant updates
-- **File Handling**: Upload and process various file types
+- **File Handling**: Upload and process various file types including documents, images, and audio
 - **Message Threading**: Organize conversations with context
 - **Modern UI**: Beautiful and responsive Material-UI design
 - **State Management**: Robust Redux implementation
 - **Database Storage**: PostgreSQL for persistent data
 - **API Documentation**: Auto-generated OpenAPI docs
+
+### Architecture
+
+#### Frontend Architecture
+The frontend is built with:
+- React 18+ with TypeScript for type safety
+- Material-UI 5 for modern, responsive components
+- Redux Toolkit for state management
+- WebSocket for real-time updates
+- Vite for fast development and optimized builds
+
+Key directories:
+- `/src/components`: React components including chat interface
+- `/src/store`: Redux state management and actions
+- `/src/types`: TypeScript type definitions
+- `/src/api`: API client code and WebSocket handling
+
+#### Backend Architecture
+The backend uses:
+- FastAPI for high-performance API endpoints
+- WebSocket support for real-time communication
+- SQLAlchemy for database ORM and models
+- Pydantic for data validation
+- Tyler Python package integration
+
+Key directories:
+- `/api`: API endpoint definitions
+- `/models`: Database models and schemas
+- `/services`: Business logic and file processing
+- `/schemas`: Pydantic models for validation
+
+## Version Compatibility
+
+Tyler Chat includes version information to help track compatibility with the Tyler agent package:
+
+- The current Tyler Chat version is displayed in the UI at the bottom of the sidebar
+- It shows both the Tyler Chat version and the compatible Tyler agent version
+- The frontend is the single source of truth for version information
+
+### Updating Version Information
+
+To update the version compatibility information:
+
+1. Edit `frontend/src/utils/version.ts` - this is the ONLY file you need to update
+2. Update the `TYLER_CHAT_VERSION` constant when making significant changes to the chat interface itself
+3. Update the `TYLER_COMPATIBLE_VERSION` constant to match the tested Tyler agent version
+
+The version information is automatically propagated from the frontend to the backend via API calls, ensuring consistency across the application. This approach means you only need to update version information in one place.
 
 ## Setup and Installation
 
@@ -148,38 +196,6 @@ pytest
 cd frontend
 npm test
 ```
-
-## Architecture
-
-### Frontend Architecture
-
-The frontend is built with:
-- React 18+ with TypeScript
-- Material-UI for components
-- Redux Toolkit for state management
-- WebSocket for real-time updates
-- Vite for development and building
-
-Key directories:
-- `/src/components`: React components
-- `/src/store`: Redux state management
-- `/src/types`: TypeScript type definitions
-- `/src/api`: API client code
-
-### Backend Architecture
-
-The backend uses:
-- FastAPI for API endpoints
-- WebSocket support for real-time
-- SQLAlchemy for database ORM
-- Pydantic for data validation
-- Tyler Python package integration
-
-Key directories:
-- `/api`: API endpoint definitions
-- `/models`: Database models
-- `/services`: Business logic
-- `/schemas`: Pydantic models
 
 ## License
 

@@ -44,6 +44,10 @@ import {
   IconX,
   IconDotsVertical,
   IconBug,
+  IconPlayerPlay,
+  IconPlayerPause,
+  IconVolume,
+  IconVolumeOff,
 } from '@tabler/icons-react';
 import { useSelector } from 'react-redux';
 import { addMessage, processThread, createThread, updateThread, deleteThread, setCurrentThread } from '@/store/chat/ChatSlice';
@@ -107,6 +111,150 @@ const TypingDots: React.FC = () => {
   );
 };
 
+const AudioPlayer: React.FC<{ src: string, filename: string }> = ({ src, filename }) => {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [volume, setVolume] = useState(1);
+  const [isMuted, setIsMuted] = useState(false);
+  const audioRef = useRef<HTMLAudioElement>(null);
+
+  const handlePlayPause = () => {
+    if (audioRef.current) {
+      if (isPlaying) {
+        audioRef.current.pause();
+      } else {
+        audioRef.current.play();
+      }
+      setIsPlaying(!isPlaying);
+    }
+  };
+
+  const handleTimeUpdate = () => {
+    if (audioRef.current) {
+      setCurrentTime(audioRef.current.currentTime);
+    }
+  };
+
+  const handleLoadedMetadata = () => {
+    if (audioRef.current) {
+      setDuration(audioRef.current.duration);
+    }
+  };
+
+  const handleVolumeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const newVolume = parseFloat(event.target.value);
+    setVolume(newVolume);
+    if (audioRef.current) {
+      audioRef.current.volume = newVolume;
+    }
+    setIsMuted(newVolume === 0);
+  };
+
+  const handleMuteToggle = () => {
+    if (audioRef.current) {
+      if (isMuted) {
+        audioRef.current.volume = volume || 1;
+        setIsMuted(false);
+      } else {
+        audioRef.current.volume = 0;
+        setIsMuted(true);
+      }
+    }
+  };
+
+  const handleSeek = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const seekTime = parseFloat(event.target.value);
+    setCurrentTime(seekTime);
+    if (audioRef.current) {
+      audioRef.current.currentTime = seekTime;
+    }
+  };
+
+  const formatTime = (time: number) => {
+    const minutes = Math.floor(time / 60);
+    const seconds = Math.floor(time % 60);
+    return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+  };
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (audio) {
+      const handleEnded = () => setIsPlaying(false);
+      audio.addEventListener('ended', handleEnded);
+      return () => {
+        audio.removeEventListener('ended', handleEnded);
+      };
+    }
+  }, []);
+
+  return (
+    <Box sx={{ 
+      width: '100%',
+      borderRadius: 1,
+      border: 1,
+      borderColor: 'divider',
+      p: 2,
+      bgcolor: theme => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
+    }}>
+      <audio 
+        ref={audioRef} 
+        src={src} 
+        onTimeUpdate={handleTimeUpdate}
+        onLoadedMetadata={handleLoadedMetadata}
+        style={{ display: 'none' }}
+      />
+      <Stack spacing={1}>
+        <Typography variant="subtitle2" noWrap title={filename}>
+          {filename}
+        </Typography>
+        <Stack direction="row" spacing={1} alignItems="center">
+          <IconButton 
+            onClick={handlePlayPause} 
+            size="small"
+            color="primary"
+          >
+            {isPlaying ? <IconPlayerPause size={20} /> : <IconPlayerPlay size={20} />}
+          </IconButton>
+          <Typography variant="caption" sx={{ minWidth: 45 }}>
+            {formatTime(currentTime)}
+          </Typography>
+          <Box sx={{ flex: 1 }}>
+            <input
+              type="range"
+              min={0}
+              max={duration || 0}
+              value={currentTime}
+              onChange={handleSeek}
+              style={{ width: '100%' }}
+            />
+          </Box>
+          <Typography variant="caption" sx={{ minWidth: 45 }}>
+            {formatTime(duration)}
+          </Typography>
+          <IconButton 
+            onClick={handleMuteToggle} 
+            size="small"
+          >
+            {isMuted ? <IconVolumeOff size={18} /> : <IconVolume size={18} />}
+          </IconButton>
+          <Box sx={{ width: 60 }}>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.1}
+              value={isMuted ? 0 : volume}
+              onChange={handleVolumeChange}
+              style={{ width: '100%' }}
+            />
+          </Box>
+        </Stack>
+      </Stack>
+    </Box>
+  );
+};
+
 const ChatContent: React.FC = () => {
   const theme = useTheme();
   const dispatch = useAppDispatch();
@@ -134,6 +282,7 @@ const ChatContent: React.FC = () => {
   const [selectedAttachment, setSelectedAttachment] = useState<MessageAttachment | null>(null);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const open = Boolean(anchorEl);
+  const [isRawView, setIsRawView] = useState(false);
   
   const { threads, currentThread } = useSelector((state: RootState) => state.chat);
   const activeThread = threads.find((t: Thread) => t.id === currentThread);
@@ -247,6 +396,17 @@ const ChatContent: React.FC = () => {
     'application/zip',
     'application/x-tar',
     'application/gzip',
+    // Audio files
+    'audio/mpeg',
+    'audio/mp3',
+    'audio/mp4',
+    'audio/opus',
+    'audio/ogg',
+    'audio/wav',
+    'audio/webm',
+    'audio/aac',
+    'audio/flac',
+    'audio/x-m4a',
   ]);
 
   // Add validation helper
@@ -704,15 +864,22 @@ const ChatContent: React.FC = () => {
 
   const getImageUrl = (content: any, mimeType?: string): string | null | undefined => {
     if (!content) return undefined;
+    
+    // Check for URL in processed_content
+    if (content.url) return content.url;
+    
+    // Check for base64 content
     if (typeof content === 'string') {
       return content.startsWith('data:') 
         ? content 
         : `data:${mimeType || 'image/*'};base64,${content}`;
     }
+    
+    // Check for content field with base64 data
     if (content.content) {
       return `data:${content.mime_type || mimeType || 'image/*'};base64,${content.content}`;
     }
-    if (content.url) return content.url;
+    
     return undefined;
   };
 
@@ -849,6 +1016,7 @@ const ChatContent: React.FC = () => {
     messages,
     toggleSystemMessage,
     expandedSystemMessages,
+    isRawView,
   }: {
     message: Message;
     isLastMessage: boolean;
@@ -862,6 +1030,7 @@ const ChatContent: React.FC = () => {
     messages: Message[];
     toggleSystemMessage: (messageId: string) => void;
     expandedSystemMessages: Set<string>;
+    isRawView: boolean;
   }) => {
     const [isHovered, setIsHovered] = React.useState(false);
     const [isCopied, setIsCopied] = React.useState(false);
@@ -898,6 +1067,96 @@ const ChatContent: React.FC = () => {
         contentRefs.current.set(message.id, el);
       }
     }, [message.id, contentRefs]);
+
+    // Raw view rendering
+    if (isRawView) {
+      return (
+        <Box 
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+        >
+          <Box p={3} sx={{ display: 'flex', justifyContent: 'center' }}>
+            <Box sx={{ width: '100%', maxWidth: 900 }}>
+              <Stack direction="row" gap="16px" mb={2}>
+                <Avatar
+                  sx={{
+                    bgcolor: getMessageColor(message.role),
+                    width: 40,
+                    height: 40,
+                    color: 'white',
+                    alignSelf: 'flex-start'
+                  }}
+                >
+                  {getMessageIcon(message.role)}
+                </Avatar>
+                <Box sx={{ flex: 1 }}>
+                  <Box
+                    component="pre"
+                    sx={{
+                      m: 0,
+                      p: 2,
+                      borderRadius: 1,
+                      bgcolor: theme => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
+                      border: 1,
+                      borderColor: theme => theme.palette.mode === 'dark' ? 'grey.700' : 'grey.200',
+                      fontFamily: 'monospace',
+                      fontSize: '0.875rem',
+                      overflow: 'auto',
+                      whiteSpace: 'pre-wrap',
+                      wordWrap: 'break-word'
+                    }}
+                  >
+                    <Box component="code">
+                      {JSON.stringify(message, null, 2)}
+                    </Box>
+                  </Box>
+                  {/* Footer with metrics and timestamp */}
+                  <Box 
+                    sx={{ 
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      mt: 1,
+                      gap: 2,
+                      color: 'text.secondary',
+                      typography: 'caption',
+                      height: 28
+                    }}
+                  >
+                    <Box sx={{ 
+                      display: 'flex', 
+                      gap: 2, 
+                      alignItems: 'center', 
+                      minWidth: 80,
+                      height: '100%'
+                    }}>
+                      <MessageHoverActions 
+                        isHovered={isHovered}
+                        isCopied={isCopied}
+                        isToolRelated={isToolRelated}
+                        isPlainText={isPlainText}
+                        onCopy={handleCopyMessage}
+                        onToggleFormat={() => toggleMessageFormat(message.id)}
+                      />
+                    </Box>
+                    <Box sx={{ 
+                      display: 'flex', 
+                      gap: 2, 
+                      alignItems: 'center',
+                      height: '100%'
+                    }}>
+                      {message.metrics && <MessageMetrics metrics={message.metrics} />}
+                      <MessageTimeAgo timestamp={message.timestamp} />
+                    </Box>
+                  </Box>
+                </Box>
+              </Stack>
+            </Box>
+          </Box>
+          {!isLastMessage && <Divider />}
+        </Box>
+      );
+    }
 
     // Special render for collapsed system message
     if (isSystemMessage && !isSystemExpanded) {
@@ -971,7 +1230,7 @@ const ChatContent: React.FC = () => {
                     alignItems="center" 
                     sx={{ 
                       mb: 1, 
-                      cursor: 'pointer',
+                      cursor: 'pointer', 
                       color: 'text.secondary',
                       justifyContent: 'space-between',
                       '&:hover': {
@@ -992,7 +1251,8 @@ const ChatContent: React.FC = () => {
                       sx={{
                         position: 'relative',
                         maxHeight: isSystemMessage ? 'none' : (isExpanded ? 'none' : maxHeight),
-                        overflow: 'hidden'
+                        overflow: 'hidden',
+                        mb: message.attachments && message.attachments.length > 0 ? 2 : 0
                       }}
                     >
                       <Box
@@ -1049,7 +1309,8 @@ const ChatContent: React.FC = () => {
                             display: 'flex',
                             alignItems: 'flex-end',
                             justifyContent: 'center',
-                            pt: 4
+                            pt: 4,
+                            zIndex: 1
                           }}
                         >
                           <Button
@@ -1065,7 +1326,7 @@ const ChatContent: React.FC = () => {
                       )}
                     </Box>
                     {!isSystemMessage && isExpanded && shouldShowExpand && (
-                      <Box sx={{ textAlign: 'center', mt: 1 }}>
+                      <Box sx={{ textAlign: 'center', mt: 1, mb: message.attachments && message.attachments.length > 0 ? 2 : 0 }}>
                         <Button
                           size="small"
                           variant="text"
@@ -1121,8 +1382,26 @@ const ChatContent: React.FC = () => {
                   <Box sx={{ mt: 2 }}>
                     <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
                       {message.attachments.map((attachment, index) => {
-                        const imageUrl = getImageUrl(attachment.processed_content, attachment.mime_type);
+                        // First check for storage_path
+                        let fileUrl = attachment.storage_path ? `/files/${attachment.storage_path}` : null;
                         
+                        // If no storage_path, try to get URL from processed_content
+                        if (!fileUrl) {
+                          if (typeof attachment.mime_type === 'string' && attachment.mime_type.startsWith('image/')) {
+                            fileUrl = getImageUrl(attachment.processed_content, attachment.mime_type);
+                          } else {
+                            // For non-image files, use the existing logic
+                            if (attachment.processed_content?.url) {
+                              fileUrl = attachment.processed_content.url;
+                            } else if (attachment.processed_content?.content) {
+                              fileUrl = `data:${attachment.mime_type || 'application/octet-stream'};base64,${attachment.processed_content.content}`;
+                            } else if (attachment.content) {
+                              fileUrl = `data:${attachment.mime_type || 'application/octet-stream'};base64,${attachment.content}`;
+                            }
+                          }
+                        }
+                        
+                        // Handle image attachments
                         if (typeof attachment.mime_type === 'string' && attachment.mime_type.startsWith('image/')) {
                           return (
                             <Box 
@@ -1141,7 +1420,7 @@ const ChatContent: React.FC = () => {
                               }}
                               onClick={() => handleAttachmentClick(attachment)}
                             >
-                              {imageUrl ? (
+                              {fileUrl ? (
                                 <Box sx={{ 
                                   height: '100%', 
                                   display: 'flex', 
@@ -1149,7 +1428,7 @@ const ChatContent: React.FC = () => {
                                   justifyContent: 'center'
                                 }}>
                                   <img 
-                                    src={imageUrl}
+                                    src={fileUrl}
                                     alt={attachment.filename}
                                     style={{ 
                                       maxWidth: '100%',
@@ -1161,7 +1440,7 @@ const ChatContent: React.FC = () => {
                                     }}
                                     onError={(e) => {
                                       console.error('Image failed to load:', {
-                                        src: imageUrl,
+                                        src: fileUrl,
                                         error: e
                                       });
                                     }}
@@ -1178,6 +1457,34 @@ const ChatContent: React.FC = () => {
                           );
                         }
                         
+                        // Handle audio attachments
+                        if (typeof attachment.mime_type === 'string' && attachment.mime_type.startsWith('audio/')) {
+                          return (
+                            <Box 
+                              key={index}
+                              sx={{ 
+                                width: '100%',
+                                overflow: 'hidden',
+                                borderRadius: 1,
+                              }}
+                            >
+                              {fileUrl ? (
+                                <AudioPlayer 
+                                  src={fileUrl} 
+                                  filename={attachment.filename} 
+                                />
+                              ) : (
+                                <Box sx={{ p: 2, textAlign: 'center', border: 1, borderColor: 'divider', borderRadius: 1 }}>
+                                  <Typography variant="body2" color="text.secondary">
+                                    Processing audio...
+                                  </Typography>
+                                </Box>
+                              )}
+                            </Box>
+                          );
+                        }
+                        
+                        // Handle all other file types
                         return (
                           <Chip
                             key={index}
@@ -1213,7 +1520,7 @@ const ChatContent: React.FC = () => {
                     gap: 2,
                     color: 'text.secondary',
                     typography: 'caption',
-                    height: 28, // Explicit height to prevent jumping
+                    height: 28
                   }}
                 >
                   <Box sx={{ 
@@ -1221,7 +1528,7 @@ const ChatContent: React.FC = () => {
                     gap: 2, 
                     alignItems: 'center', 
                     minWidth: 80,
-                    height: '100%', // Match parent height
+                    height: '100%'
                   }}>
                     <MessageHoverActions 
                       isHovered={isHovered}
@@ -1236,7 +1543,7 @@ const ChatContent: React.FC = () => {
                     display: 'flex', 
                     gap: 2, 
                     alignItems: 'center',
-                    height: '100%', // Match parent height
+                    height: '100%'
                   }}>
                     {message.metrics && <MessageMetrics metrics={message.metrics} />}
                     <MessageTimeAgo timestamp={message.timestamp} />
@@ -1262,8 +1569,8 @@ const ChatContent: React.FC = () => {
   });
 
   const renderMessage = (message: Message, index: number, messages: Message[]) => {
-    // Skip tool responses as they'll be rendered with their calls
-    if (message.role === 'tool' && !message.tool_call_id) {
+    // Skip tool responses as they'll be rendered with their calls, unless they have attachments
+    if (message.role === 'tool' && !message.tool_call_id && (!message.attachments || message.attachments.length === 0)) {
       return null;
     }
 
@@ -1282,6 +1589,7 @@ const ChatContent: React.FC = () => {
         messages={messages}
         toggleSystemMessage={toggleSystemMessage}
         expandedSystemMessages={expandedSystemMessages}
+        isRawView={isRawView}
       />
     );
   };
@@ -1410,6 +1718,11 @@ const ChatContent: React.FC = () => {
     if (!selectedAttachment) return null;
 
     const getFileUrl = (attachment: typeof selectedAttachment) => {
+      // First check for storage_path for all file types
+      if (attachment.storage_path) {
+        return `/files/${attachment.storage_path}`;
+      }
+      
       const isImage = typeof attachment.mime_type === 'string' && attachment.mime_type.indexOf('image/') === 0;
       
       if (isImage) {
@@ -1417,9 +1730,6 @@ const ChatContent: React.FC = () => {
       }
       
       // For non-image files, use the existing logic
-      if (attachment.storage_path) {
-        return `/files/${attachment.storage_path}`;
-      }
       if (attachment.processed_content?.url) {
         return attachment.processed_content.url;
       }
@@ -1473,6 +1783,37 @@ const ChatContent: React.FC = () => {
                 title={selectedAttachment.filename}
               />
             </object>
+          </Box>
+        );
+      }
+
+      // Handle audio files
+      if (selectedAttachment.mime_type?.startsWith('audio/')) {
+        return (
+          <Box sx={{ 
+            height: '100%', 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center',
+            p: 3
+          }}>
+            <Box sx={{ width: '100%', maxWidth: 600 }}>
+              <AudioPlayer 
+                src={fileUrl} 
+                filename={selectedAttachment.filename} 
+              />
+              <Box sx={{ mt: 4, textAlign: 'center' }}>
+                <Button
+                  variant="outlined"
+                  color="primary"
+                  href={fileUrl}
+                  download={selectedAttachment.filename}
+                  startIcon={<IconPaperclip size={20} />}
+                >
+                  Download {selectedAttachment.filename}
+                </Button>
+              </Box>
+            </Box>
           </Box>
         );
       }
@@ -1849,41 +2190,34 @@ const ChatContent: React.FC = () => {
               </Typography>
             </Stack>
           </Stack>
-          <IconButton 
-            onClick={handleMenuClick}
-            size="small"
-            sx={{
-              color: 'text.secondary',
-              '&:hover': {
-                color: 'text.primary',
-              },
-            }}
-          >
-            <IconDotsVertical size={20} />
-          </IconButton>
-          <Menu
-            anchorEl={anchorEl}
-            open={open}
-            onClose={handleMenuClose}
-            anchorOrigin={{
-              vertical: 'bottom',
-              horizontal: 'right',
-            }}
-            transformOrigin={{
-              vertical: 'top',
-              horizontal: 'right',
-            }}
-          >
-            <MenuItem 
-              onClick={handleDeleteClick}
-              sx={{ 
-                gap: 1
+          <Stack direction="row" spacing={1} alignItems="center">
+            <Tooltip title={isRawView ? "Switch to formatted view" : "Switch to raw view"}>
+              <IconButton
+                size="small"
+                onClick={() => setIsRawView(!isRawView)}
+                sx={{
+                  color: isRawView ? 'primary.main' : 'text.secondary',
+                  '&:hover': {
+                    color: 'primary.main'
+                  }
+                }}
+              >
+                {isRawView ? <IconAbc size={20} /> : <IconCode size={20} />}
+              </IconButton>
+            </Tooltip>
+            <IconButton
+              size="small"
+              onClick={handleMenuClick}
+              sx={{
+                color: 'text.secondary',
+                '&:hover': {
+                  color: 'primary.main'
+                }
               }}
             >
-              <IconTrash size={18} style={{ color: theme.palette.error.main }} />
-              Delete
-            </MenuItem>
-          </Menu>
+              <IconDotsVertical size={20} />
+            </IconButton>
+          </Stack>
         </Box>
       )}
       <Box sx={{ flexGrow: 1, position: 'relative', overflow: 'hidden' }}>
@@ -2053,6 +2387,29 @@ const ChatContent: React.FC = () => {
         </Stack>
       </Box>
       <FilePreviewModal />
+      <Menu
+        anchorEl={anchorEl}
+        open={open}
+        onClose={handleMenuClose}
+        anchorOrigin={{
+          vertical: 'bottom',
+          horizontal: 'right',
+        }}
+        transformOrigin={{
+          vertical: 'top',
+          horizontal: 'right',
+        }}
+      >
+        <MenuItem 
+          onClick={handleDeleteClick}
+          sx={{ 
+            gap: 1
+          }}
+        >
+          <IconTrash size={18} style={{ color: theme.palette.error.main }} />
+          Delete
+        </MenuItem>
+      </Menu>
     </Box>
   );
 };
