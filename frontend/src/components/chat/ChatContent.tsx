@@ -556,12 +556,12 @@ const ChatContent: React.FC = () => {
   const getMessageIcon = (role: string) => {
     switch (role) {
       case 'assistant':
-        return <IconRobot size={24} />;
+        return <IconRobot size={20} />;
       case 'system':
       case 'tool':
-        return <IconCode size={24} />;
+        return <IconCode size={20} />;
       default:
-        return <IconUser size={24} />;
+        return <IconUser size={20} />;
     }
   };
 
@@ -1081,8 +1081,8 @@ const ChatContent: React.FC = () => {
                 <Avatar
                   sx={{
                     bgcolor: getMessageColor(message.role),
-                    width: 40,
-                    height: 40,
+                    width: 30,
+                    height: 30,
                     color: 'white',
                     alignSelf: 'flex-start'
                   }}
@@ -1176,12 +1176,12 @@ const ChatContent: React.FC = () => {
                 <Avatar
                   sx={{
                     bgcolor: getMessageColor('system'),
-                    width: 40,
-                    height: 40,
+                    width: 30,
+                    height: 30,
                     color: 'white'
                   }}
                 >
-                  <IconCode size={24} />
+                  <IconCode size={20} />
                 </Avatar>
                 <Stack 
                   direction="row" 
@@ -1215,8 +1215,8 @@ const ChatContent: React.FC = () => {
               <Avatar
                 sx={{
                   bgcolor: getMessageColor(message.role),
-                  width: 40,
-                  height: 40,
+                  width: 30,
+                  height: 30,
                   color: 'white',
                   alignSelf: 'flex-start'
                 }}
