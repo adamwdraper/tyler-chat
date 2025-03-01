@@ -718,7 +718,7 @@ const ChatContent: React.FC = () => {
             <Stack direction="row" spacing={1} alignItems="center">
               <IconTool size={16} />
               <Typography variant="body2" fontWeight={600} color="secondary.main">
-                {functionName} Result
+                Result: {functionName}
               </Typography>
             </Stack>
             <IconChevronDown size={16} style={{ color: theme.palette.text.secondary }} />
@@ -760,7 +760,7 @@ const ChatContent: React.FC = () => {
             <Stack direction="row" spacing={1} alignItems="center">
               <IconTool size={16} />
               <Typography variant="body2" fontWeight={600} color="secondary.main">
-                {functionName} Result
+                Result: {functionName}
               </Typography>
             </Stack>
             <IconChevronUp size={16} style={{ color: theme.palette.text.secondary }} />
@@ -1304,7 +1304,7 @@ const ChatContent: React.FC = () => {
               >
                 {getMessageIcon(message.role)}
               </Avatar>
-              <Box sx={{ flex: 1, mt: '10px' }}>
+              <Box sx={{ flex: 1, mt: '4px' }}>
                 {isSystemMessage && (
                   <Stack 
                     direction="row" 
