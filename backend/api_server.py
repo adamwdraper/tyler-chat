@@ -117,6 +117,23 @@ async def lifespan(app: FastAPI):
         logger.error(f"File store health check failed: {health['errors']}")
         raise RuntimeError("File store initialization failed")
     logger.info(f"File store health check passed. Storage size: {health['total_size']} bytes, Files: {health['file_count']}")
+    
+    # Initialize agent with available tools
+    logger.info(f"Initializing agent with tools: {available_tools}")
+    global agent
+    try:
+        agent = Agent(
+            model_name="gpt-4o",
+            purpose="To help with general questions",
+            tools=available_tools,
+            thread_store=thread_store
+        )
+        logger.info(f"Agent initialized successfully with tools: {available_tools}")
+    except ValueError as e:
+        # Log the error and raise to prevent app startup
+        logger.error(f"Error initializing agent: {str(e)}")
+        raise RuntimeError(f"API server cannot start with invalid tool configuration: {str(e)}")
+    
     yield
 
 # Initialize FastAPI app
@@ -150,21 +167,19 @@ thread_store = ThreadStore(db_url)
 file_store = FileStore()
 logger.info(f"Initialized file store at: {file_store.base_path}")
 
-agent = Agent(
-    model_name="gpt-4o",
-    purpose="To help with general questions",
-    tools=[
-        "web",
-        "slack",
-        "notion",
-        "command_line",
-        "image",
-        "audio",
-        "files",
-        "documents"
-    ],
-    thread_store=thread_store
-)
+# Define available tools
+available_tools = [
+    "web",
+    "slack",
+    "notion",
+    "command_line",
+    "image",
+    "audio",
+    "files"
+]
+
+# Declare agent variable that will be initialized in lifespan
+agent = None
 
 # Dependency to get thread store
 async def get_thread_store():
@@ -327,6 +342,13 @@ async def add_message(
     
     # Process thread if requested
     if process:
+        # Ensure agent is initialized
+        if agent is None:
+            raise HTTPException(
+                status_code=500, 
+                detail="Agent is not properly initialized. The server may be starting up or there was an error during initialization."
+            )
+            
         print(f"\nProcessing thread {thread_id}")
         thread, new_messages = await agent.go(thread.id)
         
@@ -359,6 +381,13 @@ async def process_thread(
     thread_store: ThreadStore = Depends(get_thread_store)
 ):
     """Process a thread with the agent"""
+    # Ensure agent is initialized
+    if agent is None:
+        raise HTTPException(
+            status_code=500, 
+            detail="Agent is not properly initialized. The server may be starting up or there was an error during initialization."
+        )
+        
     thread = await thread_store.get(thread_id)
     if not thread:
         raise HTTPException(status_code=404, detail="Thread not found")
@@ -376,6 +405,11 @@ async def process_thread(
 
 async def generate_and_save_title(thread_id: str, thread_store: ThreadStore, manager: ConnectionManager):
     """Background task to generate and save title"""
+    # Ensure agent is initialized
+    if agent is None:
+        logger.error("Cannot generate title: Agent is not properly initialized")
+        return
+        
     print(f"\nBackground task starting for thread {thread_id}")
     thread = await thread_store.get(thread_id)
     if thread and not thread.attributes.get("title_generated"):
