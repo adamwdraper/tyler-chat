@@ -268,6 +268,8 @@ const ChatContent: React.FC = () => {
   const [isNewTitle, setIsNewTitle] = React.useState(false);
   const [fadeIn, setFadeIn] = React.useState(true);
   const [expandedSystemMessages, setExpandedSystemMessages] = React.useState<Set<string>>(new Set());
+  const [expandedToolCalls, setExpandedToolCalls] = React.useState<Set<string>>(new Set());
+  const [expandedToolResults, setExpandedToolResults] = React.useState<Set<string>>(new Set());
   const contentRefs = React.useRef<Map<string, HTMLDivElement>>(new Map());
   const [hoveredMessageId, setHoveredMessageId] = React.useState<string | null>(null);
   const maxHeight = 300; // About 15 lines of text
@@ -663,7 +665,69 @@ const ChatContent: React.FC = () => {
     return JSON.parse(jsonified);
   };
 
-  const renderFormattedCode = (data: any, functionName?: string) => {
+  const renderFormattedCode = (data: any, functionName?: string, messageId?: string) => {
+    const isToolResultExpanded = messageId ? expandedToolResults.has(messageId) : true;
+    
+    // If no message ID or function name, just render the data
+    if (!messageId || !functionName) {
+      return (
+        <Paper
+          variant="outlined"
+          sx={{
+            bgcolor: theme => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
+            fontFamily: 'monospace',
+            overflow: 'hidden',
+            fontSize: '0.875rem',
+            whiteSpace: 'pre-wrap',
+            wordWrap: 'break-word',
+            width: '100%',
+            wordBreak: 'break-word',
+            color: 'text.secondary',
+            p: 2,
+          }}
+        >
+          {JSON.stringify(data, null, 2)}
+        </Paper>
+      );
+    }
+    
+    // Collapsed view for tool results
+    if (!isToolResultExpanded) {
+      return (
+        <Paper
+          variant="outlined"
+          onClick={() => toggleToolResult(messageId)}
+          sx={{
+            bgcolor: theme => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
+            fontFamily: 'monospace',
+            overflow: 'hidden',
+            fontSize: '0.875rem',
+            whiteSpace: 'pre-wrap',
+            wordWrap: 'break-word',
+            width: '100%',
+            wordBreak: 'break-word',
+            color: 'text.secondary',
+            p: 2,
+            cursor: 'pointer',
+            '&:hover': {
+              bgcolor: theme => theme.palette.mode === 'dark' ? 'grey.700' : 'grey.100',
+            }
+          }}
+        >
+          <Stack direction="row" justifyContent="space-between" alignItems="center">
+            <Stack direction="row" spacing={1} alignItems="center">
+              <IconTool size={16} />
+              <Typography variant="body2" fontWeight={600} color="secondary.main">
+                {functionName} Result
+              </Typography>
+            </Stack>
+            <IconChevronDown size={16} style={{ color: theme.palette.text.secondary }} />
+          </Stack>
+        </Paper>
+      );
+    }
+    
+    // Expanded view for tool results
     return (
       <Paper
         variant="outlined"
@@ -680,22 +744,31 @@ const ChatContent: React.FC = () => {
           p: 2,
         }}
       >
-        {functionName ? (
-          <>
-            <Stack spacing={0.5}>
-              <Box component="span" sx={{ color: 'text.secondary', fontSize: '0.75rem', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 1 }}>
-                <IconTool size={14} />
-                Result
-              </Box>
-              <Box component="span" sx={{ color: 'secondary.main', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
-                {functionName}
-              </Box>
+        <Stack spacing={1}>
+          <Stack 
+            direction="row" 
+            justifyContent="space-between" 
+            alignItems="center"
+            onClick={() => toggleToolResult(messageId)}
+            sx={{ 
+              cursor: 'pointer',
+              '&:hover': {
+                color: 'text.primary'
+              }
+            }}
+          >
+            <Stack direction="row" spacing={1} alignItems="center">
+              <IconTool size={16} />
+              <Typography variant="body2" fontWeight={600} color="secondary.main">
+                {functionName} Result
+              </Typography>
             </Stack>
+            <IconChevronUp size={16} style={{ color: theme.palette.text.secondary }} />
+          </Stack>
+          <Box sx={{ mt: 1 }}>
             {JSON.stringify(data, null, 2)}
-          </>
-        ) : (
-          JSON.stringify(data, null, 2)
-        )}
+          </Box>
+        </Stack>
       </Paper>
     );
   };
@@ -756,9 +829,9 @@ const ChatContent: React.FC = () => {
       if (role === 'tool') {
         try {
           const parsedContent = JSON.parse(content);
-          return renderFormattedCode(parsedContent, message.name);
+          return renderFormattedCode(parsedContent, message.name, message.id);
         } catch {
-          return renderFormattedCode(content, message.name);
+          return renderFormattedCode(content, message.name, message.id);
         }
       }
       const isPlainText = plainTextMessages.has(message.id);
@@ -783,7 +856,7 @@ const ChatContent: React.FC = () => {
         {content.map((item, index) => {
           if (item.type === 'text') {
             if (role === 'tool') {
-              return renderFormattedCode(item.text, message.name);
+              return renderFormattedCode(item.text, message.name, message.id);
             }
             const isPlainText = plainTextMessages.has(message.id);
             return isPlainText ? (
@@ -1016,6 +1089,10 @@ const ChatContent: React.FC = () => {
     messages,
     toggleSystemMessage,
     expandedSystemMessages,
+    expandedToolCalls,
+    toggleToolCall,
+    expandedToolResults,
+    toggleToolResult,
     isRawView,
   }: {
     message: Message;
@@ -1030,6 +1107,10 @@ const ChatContent: React.FC = () => {
     messages: Message[];
     toggleSystemMessage: (messageId: string) => void;
     expandedSystemMessages: Set<string>;
+    expandedToolCalls: Set<string>;
+    toggleToolCall: (toolCallId: string) => void;
+    expandedToolResults: Set<string>;
+    toggleToolResult: (messageId: string) => void;
     isRawView: boolean;
   }) => {
     const [isHovered, setIsHovered] = React.useState(false);
@@ -1344,35 +1425,92 @@ const ChatContent: React.FC = () => {
                 {message.tool_calls && message.tool_calls.length > 0 && (
                   <Box sx={{ mt: 2 }}>
                     <Stack spacing={2}>
-                      {message.tool_calls.map((toolCall) => (
-                        <Paper
-                          key={toolCall.id}
-                          variant="outlined"
-                          sx={{
-                            bgcolor: theme => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
-                            fontFamily: 'monospace',
-                            overflow: 'hidden',
-                            fontSize: '0.875rem',
-                            whiteSpace: 'pre-wrap',
-                            wordWrap: 'break-word',
-                            width: '100%',
-                            wordBreak: 'break-word',
-                            color: 'text.secondary',
-                            p: 2,
-                          }}
-                        >
-                          <Stack spacing={0.5}>
-                            <Box component="span" sx={{ color: 'text.secondary', fontSize: '0.75rem', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 1 }}>
-                              <IconTool size={14} />
-                              Call
-                            </Box>
-                            <Box component="span" sx={{ color: 'secondary.main', fontWeight: 600 }}>
-                              {toolCall.function.name}
-                            </Box>
-                          </Stack>
-                          {JSON.stringify(JSON.parse(toolCall.function.arguments), null, 2)}
-                        </Paper>
-                      ))}
+                      {message.tool_calls.map((toolCall) => {
+                        const isToolCallExpanded = expandedToolCalls.has(toolCall.id);
+                        
+                        // Collapsed view
+                        if (!isToolCallExpanded) {
+                          return (
+                            <Paper
+                              key={toolCall.id}
+                              variant="outlined"
+                              onClick={() => toggleToolCall(toolCall.id)}
+                              sx={{
+                                bgcolor: theme => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
+                                fontFamily: 'monospace',
+                                overflow: 'hidden',
+                                fontSize: '0.875rem',
+                                whiteSpace: 'pre-wrap',
+                                wordWrap: 'break-word',
+                                width: '100%',
+                                wordBreak: 'break-word',
+                                color: 'text.secondary',
+                                p: 2,
+                                cursor: 'pointer',
+                                '&:hover': {
+                                  bgcolor: theme => theme.palette.mode === 'dark' ? 'grey.700' : 'grey.100',
+                                }
+                              }}
+                            >
+                              <Stack direction="row" justifyContent="space-between" alignItems="center">
+                                <Stack direction="row" spacing={1} alignItems="center">
+                                  <IconTool size={16} />
+                                  <Typography variant="body2" fontWeight={600} color="secondary.main">
+                                    {toolCall.function.name}
+                                  </Typography>
+                                </Stack>
+                                <IconChevronDown size={16} style={{ color: theme.palette.text.secondary }} />
+                              </Stack>
+                            </Paper>
+                          );
+                        }
+                        
+                        // Expanded view
+                        return (
+                          <Paper
+                            key={toolCall.id}
+                            variant="outlined"
+                            sx={{
+                              bgcolor: theme => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
+                              fontFamily: 'monospace',
+                              overflow: 'hidden',
+                              fontSize: '0.875rem',
+                              whiteSpace: 'pre-wrap',
+                              wordWrap: 'break-word',
+                              width: '100%',
+                              wordBreak: 'break-word',
+                              color: 'text.secondary',
+                              p: 2,
+                            }}
+                          >
+                            <Stack spacing={1}>
+                              <Stack 
+                                direction="row" 
+                                justifyContent="space-between" 
+                                alignItems="center"
+                                onClick={() => toggleToolCall(toolCall.id)}
+                                sx={{ 
+                                  cursor: 'pointer',
+                                  '&:hover': {
+                                    color: 'text.primary'
+                                  }
+                                }}
+                              >
+                                <Stack direction="row" spacing={1} alignItems="center">
+                                  <IconTool size={16} />
+                                  <Typography variant="body2" fontWeight={600} color="secondary.main">
+                                    {toolCall.function.name}
+                                  </Typography>
+                                </Stack>
+                                <IconChevronUp size={16} style={{ color: theme.palette.text.secondary }} />
+                              </Stack>
+                              <Box sx={{ mt: 1 }}>
+                                {JSON.stringify(JSON.parse(toolCall.function.arguments), null, 2)}
+                              </Box>
+                            </Stack>
+                          </Paper>
+                        );
+                      })}
                     </Stack>
                   </Box>
                 )}
@@ -1564,7 +1702,11 @@ const ChatContent: React.FC = () => {
       prevProps.contentHeights.get(prevProps.message.id) === nextProps.contentHeights.get(nextProps.message.id) &&
       prevProps.plainTextMessages.has(prevProps.message.id) === nextProps.plainTextMessages.has(nextProps.message.id) &&
       prevProps.expandedSystemMessages.has(prevProps.message.id) === nextProps.expandedSystemMessages.has(nextProps.message.id) &&
-      prevProps.toggleSystemMessage === nextProps.toggleSystemMessage
+      prevProps.toggleSystemMessage === nextProps.toggleSystemMessage &&
+      prevProps.expandedToolCalls.has(prevProps.message.id) === nextProps.expandedToolCalls.has(nextProps.message.id) &&
+      prevProps.toggleToolCall === nextProps.toggleToolCall &&
+      prevProps.expandedToolResults.has(prevProps.message.id) === nextProps.expandedToolResults.has(nextProps.message.id) &&
+      prevProps.toggleToolResult === nextProps.toggleToolResult
     );
   });
 
@@ -1589,6 +1731,10 @@ const ChatContent: React.FC = () => {
         messages={messages}
         toggleSystemMessage={toggleSystemMessage}
         expandedSystemMessages={expandedSystemMessages}
+        expandedToolCalls={expandedToolCalls}
+        toggleToolCall={toggleToolCall}
+        expandedToolResults={expandedToolResults}
+        toggleToolResult={toggleToolResult}
         isRawView={isRawView}
       />
     );
@@ -2019,6 +2165,32 @@ const ChatContent: React.FC = () => {
   // Add new function to toggle system message expansion
   const toggleSystemMessage = (messageId: string) => {
     setExpandedSystemMessages(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(messageId)) {
+        newSet.delete(messageId);
+      } else {
+        newSet.add(messageId);
+      }
+      return newSet;
+    });
+  };
+
+  // Add new function to toggle tool call expansion
+  const toggleToolCall = (toolCallId: string) => {
+    setExpandedToolCalls(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(toolCallId)) {
+        newSet.delete(toolCallId);
+      } else {
+        newSet.add(toolCallId);
+      }
+      return newSet;
+    });
+  };
+
+  // Add new function to toggle tool result expansion
+  const toggleToolResult = (messageId: string) => {
+    setExpandedToolResults(prev => {
       const newSet = new Set(prev);
       if (newSet.has(messageId)) {
         newSet.delete(messageId);
