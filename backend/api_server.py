@@ -25,6 +25,7 @@ from tyler.models.agent import Agent
 from tyler.database.thread_store import ThreadStore
 from tyler.storage import FileStore
 from tyler.mcp.utils import initialize_mcp_service, cleanup_mcp_service
+from utils.config_loader import load_mcp_config
 
 logger = logging.getLogger(__name__)
 
@@ -200,29 +201,15 @@ thread_store = ThreadStore(db_url)
 file_store = FileStore()
 logger.info(f"Initialized file store at: {file_store.base_path}")
 
-# Define MCP server configurations
-mcp_server_configs = []
-
 # Variable to store MCP service
 mcp_service = None
 
-# Check if Brave API key is available and add to configs
-brave_api_key = os.environ.get("BRAVE_API_KEY")
-if brave_api_key and brave_api_key != "your_brave_api_key":
-    mcp_server_configs.append({
-        "name": "brave",
-        "transport": "stdio",
-        "command": "npx",
-        "args": ["-y", "@modelcontextprotocol/server-brave-search"],
-        "startup_timeout": 5,
-        "required": False,
-        "env": {
-            "BRAVE_API_KEY": brave_api_key
-        }
-    })
-    logger.info("Brave Search MCP configuration added.")
+# Load MCP server configurations from config file
+mcp_server_configs = load_mcp_config()
+if mcp_server_configs:
+    logger.info(f"Loaded {len(mcp_server_configs)} MCP server configurations from config file")
 else:
-    logger.info("Brave Search MCP configuration not added: BRAVE_API_KEY not set or is default value.")
+    logger.info("No MCP server configurations loaded from config file")
 
 # Define available tools
 available_tools = [

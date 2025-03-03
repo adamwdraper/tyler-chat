@@ -1,0 +1,15 @@
+# MCP Server Configurations
+# This file defines the Model Context Protocol (MCP) servers that will be used by the API server.
+# Each server configuration includes all the necessary parameters to initialize and connect to the server.
+
+mcp_servers:
+  # Brave Search MCP
+  - name: brave
+    enabled: true  # Can be toggled to easily enable/disable
+    transport: stdio
+    command: npx
+    args: ["-y", "@modelcontextprotocol/server-brave-search"]
+    startup_timeout: 5
+    required: false
+    env:
+      BRAVE_API_KEY: ${BRAVE_API_KEY}
