@@ -24,6 +24,7 @@ from tyler.models.message import Message, Attachment
 from tyler.models.agent import Agent
 from tyler.database.thread_store import ThreadStore
 from tyler.storage import FileStore
+from tyler.mcp.utils import initialize_mcp_service, cleanup_mcp_service
 
 logger = logging.getLogger(__name__)
 
@@ -118,6 +119,29 @@ async def lifespan(app: FastAPI):
         raise RuntimeError("File store initialization failed")
     logger.info(f"File store health check passed. Storage size: {health['total_size']} bytes, Files: {health['file_count']}")
     
+    # Initialize MCP service if we have configurations
+    global mcp_service
+    global available_tools
+    
+    if mcp_server_configs:
+        logger.info(f"Initializing MCP service with {len(mcp_server_configs)} server configurations...")
+        try:
+            mcp_service = await initialize_mcp_service(mcp_server_configs)
+            server_names = [config["name"] for config in mcp_server_configs]
+            mcp_tools = mcp_service.get_tools_for_agent(server_names)
+            
+            if mcp_tools:
+                logger.info(f"Discovered {len(mcp_tools)} tools from MCP servers.")
+                # Add MCP tools to available tools
+                available_tools.extend(mcp_tools)
+            else:
+                logger.warning("No tools discovered from MCP servers.")
+        except Exception as e:
+            logger.error(f"Failed to initialize MCP service: {e}")
+            logger.warning("Continuing without MCP service.")
+    else:
+        logger.info("No MCP server configurations found. MCP service will not be available.")
+    
     # Initialize agent with available tools
     logger.info(f"Initializing agent with tools: {available_tools}")
     global agent
@@ -135,6 +159,15 @@ async def lifespan(app: FastAPI):
         raise RuntimeError(f"API server cannot start with invalid tool configuration: {str(e)}")
     
     yield
+    
+    # Clean up MCP service if it was initialized
+    if mcp_service:
+        logger.info("Cleaning up MCP service...")
+        try:
+            await cleanup_mcp_service()
+            logger.info("MCP service cleaned up successfully.")
+        except Exception as e:
+            logger.error(f"Error cleaning up MCP service: {e}")
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -166,6 +199,30 @@ thread_store = ThreadStore(db_url)
 # Initialize file store
 file_store = FileStore()
 logger.info(f"Initialized file store at: {file_store.base_path}")
+
+# Define MCP server configurations
+mcp_server_configs = []
+
+# Variable to store MCP service
+mcp_service = None
+
+# Check if Brave API key is available and add to configs
+brave_api_key = os.environ.get("BRAVE_API_KEY")
+if brave_api_key and brave_api_key != "your_brave_api_key":
+    mcp_server_configs.append({
+        "name": "brave",
+        "transport": "stdio",
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-brave-search"],
+        "startup_timeout": 5,
+        "required": False,
+        "env": {
+            "BRAVE_API_KEY": brave_api_key
+        }
+    })
+    logger.info("Brave Search MCP configuration added.")
+else:
+    logger.info("Brave Search MCP configuration not added: BRAVE_API_KEY not set or is default value.")
 
 # Define available tools
 available_tools = [
