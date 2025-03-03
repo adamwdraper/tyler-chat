@@ -734,7 +734,7 @@ const ChatContent: React.FC = () => {
         sx={{
           bgcolor: theme => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
           fontFamily: 'monospace',
-          overflow: 'hidden',
+          overflow: 'visible',
           fontSize: '0.875rem',
           whiteSpace: 'pre-wrap',
           wordWrap: 'break-word',
@@ -1331,7 +1331,10 @@ const ChatContent: React.FC = () => {
                     <Box
                       sx={{
                         position: 'relative',
-                        maxHeight: isSystemMessage ? 'none' : (isExpanded ? 'none' : maxHeight),
+                        maxHeight: isSystemMessage || 
+                                  (message.tool_calls && message.tool_calls.some(tc => expandedToolCalls.has(tc.id))) || 
+                                  (message.tool_call_id && expandedToolResults.has(message.id)) 
+                                  ? 'none' : (isExpanded ? 'none' : maxHeight),
                         overflow: 'hidden',
                         mb: message.attachments && message.attachments.length > 0 ? 2 : 0
                       }}
@@ -1473,7 +1476,7 @@ const ChatContent: React.FC = () => {
                             sx={{
                               bgcolor: theme => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50',
                               fontFamily: 'monospace',
-                              overflow: 'hidden',
+                              overflow: 'visible',
                               fontSize: '0.875rem',
                               whiteSpace: 'pre-wrap',
                               wordWrap: 'break-word',
