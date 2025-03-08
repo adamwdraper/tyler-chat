@@ -887,10 +887,9 @@ const ChatContent: React.FC = () => {
                   const attachment: MessageAttachment = {
                     filename: 'image.png', // Default filename
                     mime_type: 'image/png',
-                    processed_content: {
+                    attributes: {
                       type: 'image',
-                      url: item.image_url.url,
-                      content: item.image_url.url
+                      url: item.image_url.url // Store URL in attributes.url
                     }
                   };
                   handleAttachmentClick(attachment);
@@ -935,22 +934,30 @@ const ChatContent: React.FC = () => {
     }
   };
 
-  const getImageUrl = (content: any, mimeType?: string): string | null | undefined => {
-    if (!content) return undefined;
+  const getImageUrl = (attachment: any, mimeType?: string): string | null | undefined => {
+    if (!attachment) return undefined;
     
-    // Check for URL in processed_content
-    if (content.url) return content.url;
-    
-    // Check for base64 content
-    if (typeof content === 'string') {
-      return content.startsWith('data:') 
-        ? content 
-        : `data:${mimeType || 'image/*'};base64,${content}`;
+    // First check for storage_path
+    if (attachment.storage_path) {
+      return `/files/${attachment.storage_path}`;
     }
     
-    // Check for content field with base64 data
-    if (content.content) {
-      return `data:${content.mime_type || mimeType || 'image/*'};base64,${content.content}`;
+    // Then check attributes for URL
+    if (attachment.attributes?.url) {
+      return attachment.attributes.url;
+    }
+    
+    // Check for base64 content in attachment.content
+    if (attachment.content) {
+      // content should always be base64, but handle data: URLs just in case
+      return attachment.content.startsWith('data:') 
+        ? attachment.content 
+        : `data:${mimeType || 'image/*'};base64,${attachment.content}`;
+    }
+    
+    // Finally check attributes.content as fallback (for backward compatibility)
+    if (attachment.attributes?.content) {
+      return `data:${mimeType || 'image/*'};base64,${attachment.attributes.content}`;
     }
     
     return undefined;
@@ -1523,24 +1530,8 @@ const ChatContent: React.FC = () => {
                   <Box sx={{ mt: 2 }}>
                     <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
                       {message.attachments.map((attachment, index) => {
-                        // First check for storage_path
-                        let fileUrl = attachment.storage_path ? `/files/${attachment.storage_path}` : null;
-                        
-                        // If no storage_path, try to get URL from processed_content
-                        if (!fileUrl) {
-                          if (typeof attachment.mime_type === 'string' && attachment.mime_type.startsWith('image/')) {
-                            fileUrl = getImageUrl(attachment.processed_content, attachment.mime_type);
-                          } else {
-                            // For non-image files, use the existing logic
-                            if (attachment.processed_content?.url) {
-                              fileUrl = attachment.processed_content.url;
-                            } else if (attachment.processed_content?.content) {
-                              fileUrl = `data:${attachment.mime_type || 'application/octet-stream'};base64,${attachment.processed_content.content}`;
-                            } else if (attachment.content) {
-                              fileUrl = `data:${attachment.mime_type || 'application/octet-stream'};base64,${attachment.content}`;
-                            }
-                          }
-                        }
+                        // Get file URL using our helper function
+                        let fileUrl = getImageUrl(attachment, attachment.mime_type);
                         
                         // Handle image attachments
                         if (typeof attachment.mime_type === 'string' && attachment.mime_type.startsWith('image/')) {
@@ -1867,28 +1858,8 @@ const ChatContent: React.FC = () => {
     if (!selectedAttachment) return null;
 
     const getFileUrl = (attachment: typeof selectedAttachment) => {
-      // First check for storage_path for all file types
-      if (attachment.storage_path) {
-        return `/files/${attachment.storage_path}`;
-      }
-      
-      const isImage = typeof attachment.mime_type === 'string' && attachment.mime_type.indexOf('image/') === 0;
-      
-      if (isImage) {
-        return getImageUrl(attachment.processed_content, attachment.mime_type);
-      }
-      
-      // For non-image files, use the existing logic
-      if (attachment.processed_content?.url) {
-        return attachment.processed_content.url;
-      }
-      if (attachment.processed_content?.content) {
-        return `data:${attachment.mime_type || 'application/octet-stream'};base64,${attachment.processed_content.content}`;
-      }
-      if (attachment.content) {
-        return `data:${attachment.mime_type || 'application/octet-stream'};base64,${attachment.content}`;
-      }
-      return null;
+      if (!attachment) return null;
+      return getImageUrl(attachment, attachment.mime_type);
     };
 
     const renderContent = () => {

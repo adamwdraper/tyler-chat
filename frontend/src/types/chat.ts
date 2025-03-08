@@ -60,7 +60,7 @@ export interface Attachment {
   filename: string;
   content?: string;  // base64 string
   mime_type?: string;
-  processed_content?: ProcessedContent;
+  attributes?: ProcessedContent;  // Renamed from processed_content
   file_id?: string;  // Reference to stored file
   storage_path?: string;  // Path in storage backend
   storage_backend?: string;  // Storage backend type
