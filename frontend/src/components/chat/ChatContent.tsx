@@ -902,6 +902,7 @@ const ChatContent: React.FC = () => {
                     maxWidth: '100%', 
                     height: 'auto',
                     maxHeight: 300,
+                    objectFit: 'contain', // Add objectFit: 'contain'
                     borderRadius: theme.shape.borderRadius 
                   }} 
                 />
@@ -1566,6 +1567,7 @@ const ChatContent: React.FC = () => {
                                       maxWidth: '100%',
                                       height: 'auto',
                                       maxHeight: 300,
+                                      objectFit: 'contain', // Add objectFit: 'contain'
                                       display: 'block',
                                       margin: '0 auto',
                                       borderRadius: theme.shape.borderRadius
@@ -1945,14 +1947,17 @@ const ChatContent: React.FC = () => {
             height: '100%', 
             display: 'flex', 
             alignItems: 'center', 
-            justifyContent: 'center'
+            justifyContent: 'center',
+            position: 'relative',
+            overflow: 'auto' // Add overflow auto to allow scrolling if needed
           }}>
             <img 
               src={fileUrl}
               alt={selectedAttachment.filename}
               style={{ 
                 maxWidth: '100%',
-                height: 'auto',
+                maxHeight: '100%', // Change from height: 'auto' to maxHeight: '100%'
+                objectFit: 'contain', // Add objectFit: 'contain' to maintain aspect ratio
                 display: 'block',
                 margin: '0 auto',
                 borderRadius: theme.shape.borderRadius
@@ -2107,12 +2112,20 @@ const ChatContent: React.FC = () => {
               px: 3,
               pb: 3,
               pt: 2,
-              height: 'calc(100vh - 88px)'
+              height: 'calc(100vh - 88px)',
+              display: 'flex', // Add display: 'flex'
+              flexDirection: 'column', // Add flexDirection: 'column'
+              alignItems: 'center', // Add alignItems: 'center'
+              justifyContent: 'center' // Add justifyContent: 'center'
             }}>
               <Box sx={{
                 height: '100%',
+                width: '100%', // Add width: '100%'
                 borderRadius: 1,
-                overflow: 'hidden'
+                overflow: 'hidden',
+                display: 'flex', // Add display: 'flex'
+                alignItems: 'center', // Add alignItems: 'center'
+                justifyContent: 'center' // Add justifyContent: 'center'
               }}>
                 {renderContent()}
               </Box>
