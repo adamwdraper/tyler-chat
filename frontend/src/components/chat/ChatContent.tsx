@@ -58,6 +58,7 @@ import { useAppDispatch } from '@/hooks/useAppDispatch';
 import { formatTimeAgo } from '@/utils/dateUtils';
 import { useTimeAgoUpdater } from '@/hooks/useTimeAgoUpdater';
 import { useNavigate, useParams } from 'react-router-dom';
+import { FileStorageConfig, fetchFileStorageConfig, getApiUrl } from '@/utils/version';
 
 const dotAnimation = keyframes`
   0%, 20% {
@@ -285,6 +286,12 @@ const ChatContent: React.FC = () => {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const open = Boolean(anchorEl);
   const [isRawView, setIsRawView] = useState(false);
+  const [fileStorageConfig, setFileStorageConfig] = useState<FileStorageConfig>({
+    storage_type: '',
+    storage_path: '',
+    mount_path: '',
+    storage_basename: ''
+  });
   
   const { threads, currentThread } = useSelector((state: RootState) => state.chat);
   const activeThread = threads.find((t: Thread) => t.id === currentThread);
@@ -334,7 +341,10 @@ const ChatContent: React.FC = () => {
   useEffect(() => {
     if (currentThread && activeThread?.title === 'New Chat') {
       // Connect to WebSocket for this thread
-      const ws = new WebSocket(`ws://localhost:8000/ws/threads/${currentThread}`);
+      const apiUrl = getApiUrl();
+      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = apiUrl.replace(/^https?:/, wsProtocol);
+      const ws = new WebSocket(`${wsUrl}/ws/threads/${currentThread}`);
       
       ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
@@ -783,28 +793,44 @@ const ChatContent: React.FC = () => {
               {children}
             </Typography>
           ),
-          a: ({ href, children }) => (
-            <Link
-              href={href}
-              target="_blank"
-              rel="noopener noreferrer"
-              sx={{
-                color: 'primary.main',
-                textDecoration: 'none',
-                fontWeight: 500,
-                '&:hover': {
-                  color: 'primary.dark',
-                  textDecoration: 'underline',
-                },
-                '&:visited': {
-                  color: 'secondary.main',
-                },
-                transition: 'color 0.2s ease-in-out',
-              }}
-            >
-              {children}
-            </Link>
-          ),
+          a: ({ href, children }) => {
+            // Check if the href is a file link and make it absolute if needed
+            let absoluteHref = href;
+            
+            // Only process file links if we have the storage configuration
+            if (href && fileStorageConfig.storage_basename && fileStorageConfig.mount_path) {
+              const filePrefix = `${fileStorageConfig.storage_basename}/`;
+              
+              if (href.startsWith(filePrefix)) {
+                // Use the mount path from the file storage config
+                // Remove the prefix and use the mount path instead
+                absoluteHref = `${fileStorageConfig.mount_path}/${href.substring(filePrefix.length)}`;
+              }
+            }
+            
+            return (
+              <Link
+                href={absoluteHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                sx={{
+                  color: 'primary.main',
+                  textDecoration: 'none',
+                  fontWeight: 500,
+                  '&:hover': {
+                    color: 'primary.dark',
+                    textDecoration: 'underline',
+                  },
+                  '&:visited': {
+                    color: 'secondary.main',
+                  },
+                  transition: 'color 0.2s ease-in-out',
+                }}
+              >
+                {children}
+              </Link>
+            );
+          },
         }}
       >
         {content}
@@ -887,10 +913,9 @@ const ChatContent: React.FC = () => {
                   const attachment: MessageAttachment = {
                     filename: 'image.png', // Default filename
                     mime_type: 'image/png',
-                    processed_content: {
+                    attributes: {
                       type: 'image',
-                      url: item.image_url.url,
-                      content: item.image_url.url
+                      url: item.image_url.url // Store URL in attributes.url
                     }
                   };
                   handleAttachmentClick(attachment);
@@ -903,6 +928,7 @@ const ChatContent: React.FC = () => {
                     maxWidth: '100%', 
                     height: 'auto',
                     maxHeight: 300,
+                    objectFit: 'contain', // Add objectFit: 'contain'
                     borderRadius: theme.shape.borderRadius 
                   }} 
                 />
@@ -935,22 +961,38 @@ const ChatContent: React.FC = () => {
     }
   };
 
-  const getImageUrl = (content: any, mimeType?: string): string | null | undefined => {
-    if (!content) return undefined;
+  const getImageUrl = (attachment: any, mimeType?: string): string | null | undefined => {
+    if (!attachment) return undefined;
     
-    // Check for URL in processed_content
-    if (content.url) return content.url;
-    
-    // Check for base64 content
-    if (typeof content === 'string') {
-      return content.startsWith('data:') 
-        ? content 
-        : `data:${mimeType || 'image/*'};base64,${content}`;
+    // First check for storage_path
+    if (attachment.storage_path && fileStorageConfig.mount_path) {
+      return `${fileStorageConfig.mount_path}/${attachment.storage_path}`;
     }
     
-    // Check for content field with base64 data
-    if (content.content) {
-      return `data:${content.mime_type || mimeType || 'image/*'};base64,${content.content}`;
+    // Then check attributes for URL
+    if (attachment.attributes?.url) {
+      // If the URL is a relative path to the files directory, make it absolute
+      if (fileStorageConfig.storage_basename && fileStorageConfig.mount_path) {
+        const filePrefix = `${fileStorageConfig.storage_basename}/`;
+        
+        if (attachment.attributes.url.startsWith(filePrefix)) {
+          return `${fileStorageConfig.mount_path}/${attachment.attributes.url.substring(filePrefix.length)}`;
+        }
+      }
+      return attachment.attributes.url;
+    }
+    
+    // Check for base64 content in attachment.content
+    if (attachment.content) {
+      // content should always be base64, but handle data: URLs just in case
+      return attachment.content.startsWith('data:') 
+        ? attachment.content 
+        : `data:${mimeType || 'image/*'};base64,${attachment.content}`;
+    }
+    
+    // Finally check attributes.content as fallback (for backward compatibility)
+    if (attachment.attributes?.content) {
+      return `data:${mimeType || 'image/*'};base64,${attachment.attributes.content}`;
     }
     
     return undefined;
@@ -1523,24 +1565,8 @@ const ChatContent: React.FC = () => {
                   <Box sx={{ mt: 2 }}>
                     <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
                       {message.attachments.map((attachment, index) => {
-                        // First check for storage_path
-                        let fileUrl = attachment.storage_path ? `/files/${attachment.storage_path}` : null;
-                        
-                        // If no storage_path, try to get URL from processed_content
-                        if (!fileUrl) {
-                          if (typeof attachment.mime_type === 'string' && attachment.mime_type.startsWith('image/')) {
-                            fileUrl = getImageUrl(attachment.processed_content, attachment.mime_type);
-                          } else {
-                            // For non-image files, use the existing logic
-                            if (attachment.processed_content?.url) {
-                              fileUrl = attachment.processed_content.url;
-                            } else if (attachment.processed_content?.content) {
-                              fileUrl = `data:${attachment.mime_type || 'application/octet-stream'};base64,${attachment.processed_content.content}`;
-                            } else if (attachment.content) {
-                              fileUrl = `data:${attachment.mime_type || 'application/octet-stream'};base64,${attachment.content}`;
-                            }
-                          }
-                        }
+                        // Get file URL using our helper function
+                        let fileUrl = getImageUrl(attachment, attachment.mime_type);
                         
                         // Handle image attachments
                         if (typeof attachment.mime_type === 'string' && attachment.mime_type.startsWith('image/')) {
@@ -1575,6 +1601,7 @@ const ChatContent: React.FC = () => {
                                       maxWidth: '100%',
                                       height: 'auto',
                                       maxHeight: 300,
+                                      objectFit: 'contain', // Add objectFit: 'contain'
                                       display: 'block',
                                       margin: '0 auto',
                                       borderRadius: theme.shape.borderRadius
@@ -1867,28 +1894,8 @@ const ChatContent: React.FC = () => {
     if (!selectedAttachment) return null;
 
     const getFileUrl = (attachment: typeof selectedAttachment) => {
-      // First check for storage_path for all file types
-      if (attachment.storage_path) {
-        return `/files/${attachment.storage_path}`;
-      }
-      
-      const isImage = typeof attachment.mime_type === 'string' && attachment.mime_type.indexOf('image/') === 0;
-      
-      if (isImage) {
-        return getImageUrl(attachment.processed_content, attachment.mime_type);
-      }
-      
-      // For non-image files, use the existing logic
-      if (attachment.processed_content?.url) {
-        return attachment.processed_content.url;
-      }
-      if (attachment.processed_content?.content) {
-        return `data:${attachment.mime_type || 'application/octet-stream'};base64,${attachment.processed_content.content}`;
-      }
-      if (attachment.content) {
-        return `data:${attachment.mime_type || 'application/octet-stream'};base64,${attachment.content}`;
-      }
-      return null;
+      if (!attachment) return null;
+      return getImageUrl(attachment, attachment.mime_type);
     };
 
     const renderContent = () => {
@@ -1974,14 +1981,17 @@ const ChatContent: React.FC = () => {
             height: '100%', 
             display: 'flex', 
             alignItems: 'center', 
-            justifyContent: 'center'
+            justifyContent: 'center',
+            position: 'relative',
+            overflow: 'auto' // Add overflow auto to allow scrolling if needed
           }}>
             <img 
               src={fileUrl}
               alt={selectedAttachment.filename}
               style={{ 
                 maxWidth: '100%',
-                height: 'auto',
+                maxHeight: '100%', // Change from height: 'auto' to maxHeight: '100%'
+                objectFit: 'contain', // Add objectFit: 'contain' to maintain aspect ratio
                 display: 'block',
                 margin: '0 auto',
                 borderRadius: theme.shape.borderRadius
@@ -2136,12 +2146,20 @@ const ChatContent: React.FC = () => {
               px: 3,
               pb: 3,
               pt: 2,
-              height: 'calc(100vh - 88px)'
+              height: 'calc(100vh - 88px)',
+              display: 'flex', // Add display: 'flex'
+              flexDirection: 'column', // Add flexDirection: 'column'
+              alignItems: 'center', // Add alignItems: 'center'
+              justifyContent: 'center' // Add justifyContent: 'center'
             }}>
               <Box sx={{
                 height: '100%',
+                width: '100%', // Add width: '100%'
                 borderRadius: 1,
-                overflow: 'hidden'
+                overflow: 'hidden',
+                display: 'flex', // Add display: 'flex'
+                alignItems: 'center', // Add alignItems: 'center'
+                justifyContent: 'center' // Add justifyContent: 'center'
               }}>
                 {renderContent()}
               </Box>
@@ -2203,6 +2221,20 @@ const ChatContent: React.FC = () => {
       return newSet;
     });
   };
+
+  // Fetch file storage configuration
+  useEffect(() => {
+    const getFileStorageConfig = async () => {
+      try {
+        const config = await fetchFileStorageConfig();
+        setFileStorageConfig(config);
+      } catch (error) {
+        console.error('Error fetching file storage config:', error);
+      }
+    };
+    
+    getFileStorageConfig();
+  }, []);
 
   return (
     <Box
