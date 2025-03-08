@@ -90,6 +90,12 @@ class VersionInfo(BaseModel):
     installed_tyler_version: Optional[str] = None
     is_compatible: bool = False
 
+class FileStorageConfig(BaseModel):
+    storage_type: str
+    storage_path: str
+    mount_path: str
+    storage_basename: str  # The basename of the storage path, used for link detection
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan context manager for database and file store initialization."""
@@ -97,18 +103,32 @@ async def lifespan(app: FastAPI):
     await thread_store.initialize()
     
     # Create file storage directory if it doesn't exist
-    storage_path = os.getenv("TYLER_FILE_STORAGE_PATH", os.path.join(os.path.dirname(__file__), "files"))
-    if storage_path.startswith("/"):  # Convert absolute path to relative
+    # Get the storage path from environment variable or use a default
+    default_storage_path = os.path.join(os.path.dirname(__file__), "files")
+    storage_path = os.getenv("TYLER_FILE_STORAGE_PATH", default_storage_path)
+    
+    # Handle absolute paths by converting them to relative paths if needed
+    if storage_path.startswith("/"):
         storage_path = os.path.join(os.path.dirname(__file__), storage_path.lstrip("/"))
+    
+    # Create the directory if it doesn't exist
     os.makedirs(storage_path, exist_ok=True)
     logger.info(f"Ensured file storage directory exists at: {storage_path}")
     
     # Set environment variable for FileStore to use
     os.environ["TYLER_FILE_STORAGE_PATH"] = storage_path
     
+    # Define a mount path based on the storage path basename
+    # This ensures the mount path matches the directory name in the storage path
+    storage_basename = os.path.basename(storage_path)
+    mount_path = f"/{storage_basename}"
+    
+    # Store the mount path in an environment variable for other parts of the app to use
+    os.environ["TYLER_FILE_MOUNT_PATH"] = mount_path
+    
     # Mount the files directory after creating it
-    app.mount("/files", StaticFiles(directory=storage_path), name="files")
-    logger.info(f"Mounted static files directory at: {storage_path}")
+    app.mount(mount_path, StaticFiles(directory=storage_path), name=storage_basename)
+    logger.info(f"Mounted static files directory at: {storage_path} to {mount_path}")
     
     # Verify file store is accessible
     logger.info("Checking file store health...")
@@ -520,6 +540,37 @@ async def get_version_info(
         expected_tyler_version=compatible_version or EXPECTED_TYLER_VERSION,
         installed_tyler_version=installed_version,
         is_compatible=is_compatible
+    )
+
+@app.get("/config/file-storage", response_model=FileStorageConfig)
+async def get_file_storage_config():
+    """
+    Get file storage configuration information.
+    
+    Returns the storage type, path, and mount path for file storage.
+    This allows the frontend to correctly construct file URLs.
+    """
+    # Get storage type from environment variable or use default
+    storage_type = os.getenv("TYLER_FILE_STORAGE_TYPE", "local")
+    
+    # Get storage path from environment variable or use default
+    default_storage_path = os.path.join(os.path.dirname(__file__), "files")
+    storage_path = os.getenv("TYLER_FILE_STORAGE_PATH", default_storage_path)
+    
+    # Get mount path from environment variable or derive from storage path
+    mount_path = os.getenv("TYLER_FILE_MOUNT_PATH")
+    if not mount_path:
+        storage_basename = os.path.basename(storage_path)
+        mount_path = f"/{storage_basename}"
+    
+    # Get storage basename from storage path
+    storage_basename = os.path.basename(storage_path)
+    
+    return FileStorageConfig(
+        storage_type=storage_type,
+        storage_path=storage_path,
+        mount_path=mount_path,
+        storage_basename=storage_basename
     )
 
 if __name__ == "__main__":

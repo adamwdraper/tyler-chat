@@ -58,6 +58,7 @@ import { useAppDispatch } from '@/hooks/useAppDispatch';
 import { formatTimeAgo } from '@/utils/dateUtils';
 import { useTimeAgoUpdater } from '@/hooks/useTimeAgoUpdater';
 import { useNavigate, useParams } from 'react-router-dom';
+import { FileStorageConfig, fetchFileStorageConfig, getApiUrl } from '@/utils/version';
 
 const dotAnimation = keyframes`
   0%, 20% {
@@ -285,6 +286,12 @@ const ChatContent: React.FC = () => {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const open = Boolean(anchorEl);
   const [isRawView, setIsRawView] = useState(false);
+  const [fileStorageConfig, setFileStorageConfig] = useState<FileStorageConfig>({
+    storage_type: '',
+    storage_path: '',
+    mount_path: '',
+    storage_basename: ''
+  });
   
   const { threads, currentThread } = useSelector((state: RootState) => state.chat);
   const activeThread = threads.find((t: Thread) => t.id === currentThread);
@@ -334,7 +341,10 @@ const ChatContent: React.FC = () => {
   useEffect(() => {
     if (currentThread && activeThread?.title === 'New Chat') {
       // Connect to WebSocket for this thread
-      const ws = new WebSocket(`ws://localhost:8000/ws/threads/${currentThread}`);
+      const apiUrl = getApiUrl();
+      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = apiUrl.replace(/^https?:/, wsProtocol);
+      const ws = new WebSocket(`${wsUrl}/ws/threads/${currentThread}`);
       
       ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
@@ -783,28 +793,44 @@ const ChatContent: React.FC = () => {
               {children}
             </Typography>
           ),
-          a: ({ href, children }) => (
-            <Link
-              href={href}
-              target="_blank"
-              rel="noopener noreferrer"
-              sx={{
-                color: 'primary.main',
-                textDecoration: 'none',
-                fontWeight: 500,
-                '&:hover': {
-                  color: 'primary.dark',
-                  textDecoration: 'underline',
-                },
-                '&:visited': {
-                  color: 'secondary.main',
-                },
-                transition: 'color 0.2s ease-in-out',
-              }}
-            >
-              {children}
-            </Link>
-          ),
+          a: ({ href, children }) => {
+            // Check if the href is a file link and make it absolute if needed
+            let absoluteHref = href;
+            
+            // Only process file links if we have the storage configuration
+            if (href && fileStorageConfig.storage_basename && fileStorageConfig.mount_path) {
+              const filePrefix = `${fileStorageConfig.storage_basename}/`;
+              
+              if (href.startsWith(filePrefix)) {
+                // Use the mount path from the file storage config
+                // Remove the prefix and use the mount path instead
+                absoluteHref = `${fileStorageConfig.mount_path}/${href.substring(filePrefix.length)}`;
+              }
+            }
+            
+            return (
+              <Link
+                href={absoluteHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                sx={{
+                  color: 'primary.main',
+                  textDecoration: 'none',
+                  fontWeight: 500,
+                  '&:hover': {
+                    color: 'primary.dark',
+                    textDecoration: 'underline',
+                  },
+                  '&:visited': {
+                    color: 'secondary.main',
+                  },
+                  transition: 'color 0.2s ease-in-out',
+                }}
+              >
+                {children}
+              </Link>
+            );
+          },
         }}
       >
         {content}
@@ -939,12 +965,20 @@ const ChatContent: React.FC = () => {
     if (!attachment) return undefined;
     
     // First check for storage_path
-    if (attachment.storage_path) {
-      return `/files/${attachment.storage_path}`;
+    if (attachment.storage_path && fileStorageConfig.mount_path) {
+      return `${fileStorageConfig.mount_path}/${attachment.storage_path}`;
     }
     
     // Then check attributes for URL
     if (attachment.attributes?.url) {
+      // If the URL is a relative path to the files directory, make it absolute
+      if (fileStorageConfig.storage_basename && fileStorageConfig.mount_path) {
+        const filePrefix = `${fileStorageConfig.storage_basename}/`;
+        
+        if (attachment.attributes.url.startsWith(filePrefix)) {
+          return `${fileStorageConfig.mount_path}/${attachment.attributes.url.substring(filePrefix.length)}`;
+        }
+      }
       return attachment.attributes.url;
     }
     
@@ -2187,6 +2221,20 @@ const ChatContent: React.FC = () => {
       return newSet;
     });
   };
+
+  // Fetch file storage configuration
+  useEffect(() => {
+    const getFileStorageConfig = async () => {
+      try {
+        const config = await fetchFileStorageConfig();
+        setFileStorageConfig(config);
+      } catch (error) {
+        console.error('Error fetching file storage config:', error);
+      }
+    };
+    
+    getFileStorageConfig();
+  }, []);
 
   return (
     <Box
