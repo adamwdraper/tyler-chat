@@ -99,8 +99,6 @@ class FileStorageConfig(BaseModel):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan context manager for database and file store initialization."""
-    logger.info("Initializing thread store...")
-    await thread_store.initialize()
     
     # Create file storage directory if it doesn't exist
     # Get the storage path from environment variable or use a default
@@ -211,11 +209,9 @@ app.add_middleware(
 )
 
 # Initialize thread store and agent
-# Construct PostgreSQL URL from environment variables
-db_url = f"postgresql+asyncpg://{os.getenv('TYLER_DB_USER')}:{os.getenv('TYLER_DB_PASSWORD')}@{os.getenv('TYLER_DB_HOST')}:{os.getenv('TYLER_DB_PORT')}/{os.getenv('TYLER_DB_NAME')}"
-
-# Initialize ThreadStore with PostgreSQL URL
-thread_store = ThreadStore(db_url)
+# ThreadStore will use environment variables to configure the database
+thread_store = ThreadStore()
+logger.info("Initialized thread store with environment-based configuration")
 
 # Initialize file store
 file_store = FileStore()
