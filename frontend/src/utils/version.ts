@@ -9,8 +9,8 @@
 import axios from 'axios';
 
 // Local version information - SINGLE SOURCE OF TRUTH
-export const TYLER_CHAT_VERSION = '0.7.0'; // The version of this chat application itself
-export const TYLER_COMPATIBLE_VERSION = '0.7.0'; // Update this when testing with new Tyler versions
+export const TYLER_CHAT_VERSION = '0.8.0'; // The version of this chat application itself
+export const TYLER_COMPATIBLE_VERSION = '0.8.0'; // Update this when testing with new Tyler versions
 
 // Version information interface from backend
 export interface VersionInfo {
