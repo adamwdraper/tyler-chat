@@ -128,15 +128,43 @@ async def lifespan(app: FastAPI):
     app.mount(mount_path, StaticFiles(directory=storage_path), name=storage_basename)
     logger.info(f"Mounted static files directory at: {storage_path} to {mount_path}")
     
-    # Verify file store is accessible
-    logger.info("Checking file store health...")
-    file_store = FileStore()
+    # Initialize and verify file store is accessible using factory pattern
+    logger.info("Initializing file store...")
+    global file_store
+    file_store = await FileStore.create()
     logger.info(f"Initialized file store at: {file_store.base_path}")
     health = await file_store.check_health()
     if not health['healthy']:
         logger.error(f"File store health check failed: {health['errors']}")
         raise RuntimeError("File store initialization failed")
     logger.info(f"File store health check passed. Storage size: {health['total_size']} bytes, Files: {health['file_count']}")
+    
+    # Initialize ThreadStore with factory pattern
+    logger.info("Initializing thread store...")
+    global thread_store
+    
+    # Construct database URL from individual environment variables
+    db_type = os.getenv("TYLER_DB_TYPE")
+    if db_type == "postgresql":
+        db_host = os.getenv("TYLER_DB_HOST", "localhost")
+        db_port = os.getenv("TYLER_DB_PORT", "5432")
+        db_name = os.getenv("TYLER_DB_NAME", "tyler")
+        db_user = os.getenv("TYLER_DB_USER", "tyler")
+        db_password = os.getenv("TYLER_DB_PASSWORD", "tyler_dev")
+        database_url = f"postgresql+asyncpg://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+        logger.info(f"Constructed PostgreSQL database URL from environment variables")
+    elif db_type == "sqlite":
+        db_path = os.getenv("TYLER_DB_PATH", "tyler.db")
+        database_url = f"sqlite+aiosqlite:///{db_path}"
+        logger.info(f"Constructed SQLite database URL from environment variables")
+    else:
+        # Default to in-memory if no valid DB type specified
+        database_url = None
+        logger.info("No valid database type specified, using in-memory storage")
+    
+    # Create thread store with constructed database URL
+    thread_store = await ThreadStore.create(database_url)
+    logger.info(f"Thread store initialized successfully with database URL: {thread_store.database_url or 'in-memory'}")
     
     # Initialize MCP service if we have configurations
     global mcp_service
@@ -208,14 +236,11 @@ app.add_middleware(
     max_age=600  # Cache preflight requests for 10 minutes
 )
 
-# Initialize thread store and agent
-# ThreadStore will use environment variables to configure the database
-thread_store = ThreadStore()
-logger.info("Initialized thread store with environment-based configuration")
+# Declare thread_store variable that will be initialized in lifespan
+thread_store = None
 
-# Initialize file store
-file_store = FileStore()
-logger.info(f"Initialized file store at: {file_store.base_path}")
+# Declare file_store variable that will be initialized in lifespan
+file_store = None
 
 # Variable to store MCP service
 mcp_service = None
@@ -235,7 +260,8 @@ available_tools = [
     "command_line",
     "image",
     "audio",
-    "files"
+    "files",
+    "browser"
 ]
 
 # Declare agent variable that will be initialized in lifespan
@@ -270,7 +296,7 @@ class ConnectionManager:
                     await connection.send_json({
                         "type": "title_update",
                         "thread_id": thread_id,
-                        "thread": thread.to_dict()
+                        "thread": thread.model_dump()
                     })
                 except WebSocketDisconnect:
                     dead_connections.add(connection)
@@ -419,7 +445,7 @@ async def add_message(
                     background_tasks.add_task(generate_and_save_title, thread_id, thread_store, manager)
     
     # Convert thread to dict and return as JSON response
-    return JSONResponse(content=thread.to_dict())
+    return JSONResponse(content=thread.model_dump())
 
 @app.websocket("/ws/threads/{thread_id}")
 async def websocket_endpoint(websocket: WebSocket, thread_id: str):
