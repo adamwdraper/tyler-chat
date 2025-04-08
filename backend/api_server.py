@@ -296,7 +296,7 @@ class ConnectionManager:
                     await connection.send_json({
                         "type": "title_update",
                         "thread_id": thread_id,
-                        "thread": thread.to_dict()
+                        "thread": thread.model_dump()
                     })
                 except WebSocketDisconnect:
                     dead_connections.add(connection)
@@ -445,7 +445,7 @@ async def add_message(
                     background_tasks.add_task(generate_and_save_title, thread_id, thread_store, manager)
     
     # Convert thread to dict and return as JSON response
-    return JSONResponse(content=thread.to_dict())
+    return JSONResponse(content=thread.model_dump())
 
 @app.websocket("/ws/threads/{thread_id}")
 async def websocket_endpoint(websocket: WebSocket, thread_id: str):
